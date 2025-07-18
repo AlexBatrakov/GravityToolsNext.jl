@@ -1,0 +1,4 @@
+name = "GravityToolsNext"
+uuid = "d96123b9-2412-4d4a-93b7-7aa5929371a7"
+authors = ["Alexander Batrakov <batrakovalex.astro@gmail.com>"]
+version = "0.1.0"
