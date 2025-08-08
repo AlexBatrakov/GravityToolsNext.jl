@@ -8,8 +8,9 @@ using Statistics
 using StatsBase
 using Distributions
 using HypothesisTests
-
-# using LinearAlgebra
+using LinearAlgebra
+using Roots
+using Optim
 # using Random
 
 # using Distributed
@@ -28,6 +29,7 @@ include("TempoFramework/TempoCore/TempoResult.jl")
 include("TempoFramework/TempoCore/TempoTasks.jl")
 include("TempoFramework/TempoCore/TempoSettings.jl")
 include("TempoFramework/TempoCore/TempoRun.jl")
+include("TempoFramework/TempoCore/TempoWhiteNoise.jl")
 
 # Настройки
 # include("TempoFramework/Settings/BasicTempoSettings.jl")

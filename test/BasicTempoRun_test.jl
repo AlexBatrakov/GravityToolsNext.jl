@@ -22,4 +22,6 @@ basic_settings = settings = BasicTempoSettings(
 
 task = BasicTempoRun(basic_settings)
 
-all_parsed_outputs = load("test.jld2", "all_parsed_outputs")
+# jldsave("all_parsed_outputs.jld2"; all_parsed_outputs = all_parsed_outputs)
+
+all_parsed_outputs = load("all_parsed_outputs.jld2", "all_parsed_outputs")

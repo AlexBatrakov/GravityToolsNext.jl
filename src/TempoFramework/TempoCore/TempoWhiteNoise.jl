@@ -185,12 +185,14 @@ function find_EFAC_for_fixed_EQUAD_and_std!(
 
     try 
     	EFAC = find_zero(std_res_norm_objective, EFAC_init)
-    catch error 
-    	println(residuals)
-    	println(uncertainties_orig)
-    	println(EQUAD_fixed)
+    catch err 
+        println(err)
+        println(EQUAD_fixed)
     	println(std_res_norm_fixed)
-    	readline()
+        return NaN
+    	# println(residuals)
+    	# println(uncertainties_orig)
+    	# readline()
     end
     return abs(EFAC)
 end
@@ -324,56 +326,56 @@ function estimate_WhiteNoise_AD_with_offset(residuals, uncertainties_orig; print
 
     end
 
-    if plot_results
+    # if plot_results
     	
-		EFAC_arr  = collect(LinRange(0.01, ceil(EFAC_max), 128))
-		EQUAD_arr = collect(LinRange(0.0, ceil(EQUAD_max), 128))
-		AD_objective_arr = [
-    		begin
-        		transform_uncertainties!(uncertainties_transformed, uncertainties_orig, EFAC, EQUAD)
-        		AD_objective_function_fit_offset!(residuals_shifted_norm, residuals, uncertainties_transformed)[1]
-    		end
-    		for EFAC in EFAC_arr, EQUAD in EQUAD_arr
-		]
+	# 	EFAC_arr  = collect(LinRange(0.01, ceil(EFAC_max), 128))
+	# 	EQUAD_arr = collect(LinRange(0.0, ceil(EQUAD_max), 128))
+	# 	AD_objective_arr = [
+    # 		begin
+    #     		transform_uncertainties!(uncertainties_transformed, uncertainties_orig, EFAC, EQUAD)
+    #     		AD_objective_function_fit_offset!(residuals_shifted_norm, residuals, uncertainties_transformed)[1]
+    # 		end
+    # 		for EFAC in EFAC_arr, EQUAD in EQUAD_arr
+	# 	]
 
-		std_residuals_norm_arr = [
-    		begin
-        		transform_uncertainties!(uncertainties_transformed, uncertainties_orig, EFAC, EQUAD)
-        		@. residuals_norm = residuals / uncertainties_transformed
-        		std(residuals_norm)
-    		end
-    		for EFAC in EFAC_arr, EQUAD in EQUAD_arr
-		]
+	# 	std_residuals_norm_arr = [
+    # 		begin
+    #     		transform_uncertainties!(uncertainties_transformed, uncertainties_orig, EFAC, EQUAD)
+    #     		@. residuals_norm = residuals / uncertainties_transformed
+    #     		std(residuals_norm)
+    # 		end
+    # 		for EFAC in EFAC_arr, EQUAD in EQUAD_arr
+	# 	]
 
-		fig, ax = subplots()
-		imsh = ax.imshow(log10.(AD_objective_arr), extent=(EQUAD_arr[1], EQUAD_arr[end], EFAC_arr[1], EFAC_arr[end]), cmap="Blues_r", origin="lower", aspect="auto")
-		cbar = colorbar(imsh)
-		cbar.set_label(L"$\log_{10}\mathrm{AD_objective}$", fontsize=14)
+	# 	fig, ax = subplots()
+	# 	imsh = ax.imshow(log10.(AD_objective_arr), extent=(EQUAD_arr[1], EQUAD_arr[end], EFAC_arr[1], EFAC_arr[end]), cmap="Blues_r", origin="lower", aspect="auto")
+	# 	cbar = colorbar(imsh)
+	# 	cbar.set_label(L"$\log_{10}\mathrm{AD_objective}$", fontsize=14)
 
-		# cs2 = ax.contour(EQUAD_arr, EFAC_arr, AD_objective_arr, levels = [0.5, 0.75, 1.0, 1.25], linestyles=["-", "--", "-.", ":"], colors="green")
-		# plot([], [], label="AD statistics", "-",  color="green")
+	# 	# cs2 = ax.contour(EQUAD_arr, EFAC_arr, AD_objective_arr, levels = [0.5, 0.75, 1.0, 1.25], linestyles=["-", "--", "-.", ":"], colors="green")
+	# 	# plot([], [], label="AD statistics", "-",  color="green")
 
-		cs2 = ax.contour(EQUAD_arr, EFAC_arr, AD_objective_arr, levels = AD_objective_best .+ [0.1, 0.2, 0.3, 0.4], linestyles=["-", "--", "-.", ":"], colors="green")
-		plot([], [], label="AD statistics", "-",  color="green")
+	# 	cs2 = ax.contour(EQUAD_arr, EFAC_arr, AD_objective_arr, levels = AD_objective_best .+ [0.1, 0.2, 0.3, 0.4], linestyles=["-", "--", "-.", ":"], colors="green")
+	# 	plot([], [], label="AD statistics", "-",  color="green")
 
-		cs3 = ax.contour(EQUAD_arr, EFAC_arr, std_residuals_norm_arr, levels = [1.0], linestyles=["-"], colors="violet")
-		plot([], [], label="std", "-",  color="violet")
+	# 	cs3 = ax.contour(EQUAD_arr, EFAC_arr, std_residuals_norm_arr, levels = [1.0], linestyles=["-"], colors="violet")
+	# 	plot([], [], label="std", "-",  color="violet")
 
-		plot(EQUAD_best, EFAC_best, "x", color="red")
+	# 	plot(EQUAD_best, EFAC_best, "x", color="red")
 
-		AD_objective_grid, min_ind = findmin(AD_objective_arr)
-		plot(EQUAD_arr[min_ind[2]], EFAC_arr[min_ind[1]], "x", color="black")
+	# 	AD_objective_grid, min_ind = findmin(AD_objective_arr)
+	# 	plot(EQUAD_arr[min_ind[2]], EFAC_arr[min_ind[1]], "x", color="black")
 
-		println("AD_objective: optimized = $AD_objective_best, grid = $AD_objective_grid, delta = $(AD_objective_best - AD_objective_grid)")
-		println("std: optimized = $(std(residuals_norm)), grid = $(std_residuals_norm_arr[min_ind])")
+	# 	println("AD_objective: optimized = $AD_objective_best, grid = $AD_objective_grid, delta = $(AD_objective_best - AD_objective_grid)")
+	# 	println("std: optimized = $(std(residuals_norm)), grid = $(std_residuals_norm_arr[min_ind])")
 
-		xlabel("EQUAD")
-		ylabel("EFAC")
-		title("$backend")
-		legend()
-		tight_layout()
+	# 	xlabel("EQUAD")
+	# 	ylabel("EFAC")
+	# 	title("$backend")
+	# 	legend()
+	# 	tight_layout()
 
-	end
+	# end
 
     return EFAC_best, EQUAD_best, offset_best, AD_objective_best
 end

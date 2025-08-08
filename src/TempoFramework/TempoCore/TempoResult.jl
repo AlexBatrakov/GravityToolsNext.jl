@@ -30,44 +30,63 @@ end
 #--------------------------------------------------------------------------------------------------------------
 
 struct NormalizedResidualStats
+    n_points::Int
+    min::Float64
+    max::Float64
     mean::Float64
     median::Float64
     std::Float64
     skewness::Float64
     kurtosis::Float64
     chisqr::Float64
-    ad_statistics::Float64
+    ad_statistic::Float64
     ad_p_value::Float64
     ks_statistic::Float64
     ks_p_value::Float64
     jb_statistic::Float64
     jb_p_value::Float64
-    min::Float64
-    max::Float64
-    n_points::Int
+    sw_statistic::Float64
+    sw_p_value::Float64
+end
+
+function show_stat(io::IO, name::String, value::Float64, expected::Float64, sigma::Float64)
+    delta = value - expected
+    z = delta / sigma
+    println(io, @sprintf("    %-10s = %10.5f   (%+6.2fσ)", name, value, z))
 end
 
 function Base.show(io::IO, stats::NormalizedResidualStats)
-    println(io, "Normalized residual stats:")
-    println(io, "   minumum    = ", @sprintf("%.5f", stats.min))
-    println(io, "   maximum    = ", @sprintf("%.5f", stats.max))
-    println(io, "   mean       = ", @sprintf("%.5f", stats.mean))
-    println(io, "   median     = ", @sprintf("%.5f", stats.median))
-    println(io, "   std        = ", @sprintf("%.5f", stats.std))
-    println(io, "   skewness   = ", @sprintf("%.5f", stats.skewness))
-    println(io, "   kurtosis   = ", @sprintf("%.5f", stats.kurtosis))
-    println(io, "   chisqr     = ", @sprintf("%.5f", stats.chisqr))
-    println(io, "   Anderson-Darling statistic   = ", @sprintf("%.5f", stats.ad_statistics))
-    println(io, "   Kolmogorov-Smirnov statistic = ", @sprintf("%.5f", stats.ks_statistics))
-    println(io, "   Jarque-Bera statistic        = ", @sprintf("%.5f", stats.jb_statistics))
-    println(io, "   number of points = ", stats.n_points)
+    n = stats.n_points
+    println(io, "Normalized residual statistics:")
+    println(io, "  Summary statistics:")
+    println(io, @sprintf("    %-10s = %10d", "count", n))
+
+    show_stat(io, "minimum",  stats.min,      0.0, stats.std)
+    show_stat(io, "maximum",  stats.max,      0.0, stats.std)
+    show_stat(io, "mean",     stats.mean,     0.0, 1 / sqrt(n))
+    show_stat(io, "median",   stats.median,   0.0, 1.253 / sqrt(n))
+    show_stat(io, "std",      stats.std,      1.0, 1 / sqrt(2(n - 1)))
+    show_stat(io, "skewness", stats.skewness, 0.0, sqrt(6 / n))
+    show_stat(io, "kurtosis", stats.kurtosis, 0.0, sqrt(24 / n))
+
+    println(io, @sprintf("    %-10s = %10.5f", "chisqr", stats.chisqr))
+
+    println(io, "\n  Normality tests:")
+    println(io, @sprintf("    %-22s = %10.5f   (p = %6.5f)", "Anderson-Darling  A²", stats.ad_statistic, stats.ad_p_value))
+    println(io, @sprintf("    %-22s = %10.5f   (p = %6.5f)", "Kolmogorov-Smirnov D", stats.ks_statistic, stats.ks_p_value))
+    println(io, @sprintf("    %-22s = %10.5f   (p = %6.5f)", "Jarque-Bera        JB", stats.jb_statistic, stats.jb_p_value))
+    println(io, @sprintf("    %-22s = %10.5f   (p = %6.5f)", "Shapiro-Wilk       W", stats.sw_statistic, stats.sw_p_value))
 end
 
 function build_normalized_residual_statistics(x::Vector{Float64})::NormalizedResidualStats
     ad_test = OneSampleADTest(x, Normal(0, 1))
     ks_test = ApproximateOneSampleKSTest(x, Normal(0, 1))
     jb_test = JarqueBeraTest(x)
+    sw_test = ShapiroWilkTest(x)
     return NormalizedResidualStats(
+        length(x),
+        minimum(x),
+        maximum(x),
         mean(x),
         median(x),
         std(x),
@@ -80,9 +99,8 @@ function build_normalized_residual_statistics(x::Vector{Float64})::NormalizedRes
         pvalue(ks_test),
         jb_test.JB,
         pvalue(jb_test),
-        minimum(x),
-        maximum(x),
-        length(x)
+        sw_test.W,
+        pvalue(sw_test)
     )
 end
 
@@ -115,7 +133,7 @@ function Base.show(io::IO, stats::ResidualStatistics)
 end
 
 function build_residual_statistics(
-    entries::Vector{DataEntry},
+    entries::Vector{CombinedTOAEntry},
     global_wmean::Float64
     )::ResidualStatistics
 
@@ -156,16 +174,16 @@ function Base.show(io::IO, entry::ResidualStatisticsEntry)
 end
 
 function build_residual_statistics_entry(
-    entries::Vector{DataEntry},
+    entries::Vector{CombinedTOAEntry},
     global_wmean::Float64
     )::ResidualStatisticsEntry
     # --- Общая статистика по всем записям
     all_stats = build_residual_statistics(entries, global_wmean)
 
     # --- Группировка по backend
-    grouped = Dict{String, Vector{DataEntry}}()
+    grouped = Dict{String, Vector{CombinedTOAEntry}}()
     for e in entries
-        push!(get!(grouped, e.backend, DataEntry[]), e)
+        push!(get!(grouped, e.backend, CombinedTOAEntry[]), e)
     end
 
     # --- Статистика по каждому backend с тем же global_wmean
@@ -197,13 +215,13 @@ function Base.show(io::IO, group::ResidualStatisticsGroup)
     show(IOContext(io, :indent => 4), group.in_tim)
 end
 
-function compute_global_wmean(entries::Vector{DataEntry})
+function compute_global_wmean(entries::Vector{CombinedTOAEntry})
     residuals_tn = [e.residual_tn for e in entries]
     weights      = [e.weight for e in entries]
     return sum(residuals_tn .* weights) / sum(weights)
 end
 
-function build_residual_statistics_group(entries::Vector{DataEntry})::ResidualStatisticsGroup
+function build_residual_statistics_group(entries::Vector{CombinedTOAEntry})::ResidualStatisticsGroup
     entries_in_fit = filter(e -> e.in_fit, entries)
     global_wmean = compute_global_wmean(entries_in_fit)
 
@@ -283,7 +301,6 @@ function build_white_noise_fit(
             EQUAD,
             offset,
             AD_obj,
-            length(residuals),
             stats
         )
 
@@ -305,7 +322,7 @@ end
 
 struct InternalIterationResult
     output::InternalIterationOutput
-    residuals::Union{Vector{RawResidualEntry}, Nothing}
+    residuals::Union{Vector{TempoResidualEntry}, Nothing}
     stats::Union{ResidualStatisticsGroup, Nothing}
     white_noise_fit::Union{WhiteNoiseFitResult, Nothing}
     metadata::Dict{Symbol, Any}
@@ -359,7 +376,7 @@ function build_internal_iteration_result(
 )::InternalIterationResult
 
     # Обработка случая с ошибкой
-    if output.error ≠ TempoOutputError()
+    if output.error != TempoOutputError()
         return InternalIterationResult(
             output,
             nothing,
@@ -436,7 +453,7 @@ function find_worst_parameter(fit_params::Vector{FitParameter})
     worst_parameter = nothing
 
     for p in fit_params
-        if p.fit_flag && isfinite(p.uncertainty) && p.uncertainty ≠ 0
+        if p.fit_flag && isfinite(p.uncertainty) && p.uncertainty != 0
             ratio = p.difference / p.uncertainty
             if abs(ratio) > abs(worst_ratio)
                 worst_ratio = ratio
@@ -556,7 +573,6 @@ function is_converged_by(info::ConvergenceInfo, keys::Symbol...)
     all(key -> get_convergence_metric(info, key) ≤ info.threshold[key], keys)
 end
 
-
 function build_convergence_info(
     iterations::Vector{InternalIterationResult};
     threshold::Dict{Symbol, Float64} = default_convergence_thresholds()
@@ -619,10 +635,6 @@ function build_convergence_info(
         is_converged(info)
     )
 end
-
-#--------------------------------------------------------------------------------------------------------------
-
-
 
 #--------------------------------------------------------------------------------------------------------------
 

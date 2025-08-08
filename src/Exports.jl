@@ -24,7 +24,7 @@ export BasicTempoSettings, copy_settings
 # Execution
 export run_tempo_raw, run_tempo_parsed, cleanup_old_tempo_files
 
-export TimTOAEntry, read_tim_file, TempoResidualEntry, read_residual_file, CombinedTOAEntry
+export TimTOAEntry, read_tim_file, TempoResidualEntry, read_residual_file, CombinedTOAEntry, combine_tim_and_residuals, build_white_noise_fit
 
 export BasicTempoRun
 

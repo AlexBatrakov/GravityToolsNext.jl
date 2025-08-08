@@ -12,7 +12,7 @@ function run_task(task::BasicTempoRun)::GeneralTempoResult
     settings = task.settings
     all_parsed_outputs = run_tempo_parsed(settings)
 
-    selected_index = length(all_parsed_outputs)
+    # selected_index = length(all_parsed_outputs)
 
     tim_file_entries = read_tim_file(joinpath(settings.files.work_dir, settings.files.tim_file))
 
@@ -20,7 +20,7 @@ function run_task(task::BasicTempoRun)::GeneralTempoResult
 
     for (i, parsed_output) in enumerate(all_parsed_outputs)
         residual_path = settings.behavior.write_residuals ? joinpath(settings.files.work_dir, "residuals_$i.dat") : nothing
-        iter_result = build_internal_iteration_result(parsed_output, residual_path, tim_file_entries; time_start = settings.modifiers.time_start, time_finish = settings.modifiers.time_finish, save_residuals = true)#settings.behavior.save_residuals)
+        iter_result = build_internal_iteration_result(parsed_output, residual_path, tim_file_entries; time_start = settings.modifiers.time_start, time_finish = settings.modifiers.time_finish, save_residuals = true, analyze_white_noise=true)#settings.behavior.save_residuals)
         push!(all_parsed_results, iter_result)
     end
 
