@@ -13,7 +13,10 @@ basic_settings = settings = BasicTempoSettings(
     override_params = [TP("DM", 116)],
     write_output = true,
     write_residuals = true,
-    save_internal_iterations = true
+    save_internal_iterations = true,
+    save_residuals = false,
+    white_noise_enabled = true,
+    white_noise_scope = :all
 )
 
 # basic_settings_new = copy(basic_settings; gain = 0.5, nits = 3)
@@ -22,6 +25,8 @@ basic_settings = settings = BasicTempoSettings(
 
 task = BasicTempoRun(basic_settings)
 
-# jldsave("all_parsed_outputs.jld2"; all_parsed_outputs = all_parsed_outputs)
+parsed_iter_outputs = run_tempo_parsed(settings)
 
-all_parsed_outputs = load("all_parsed_outputs.jld2", "all_parsed_outputs")
+# jldsave("parsed_iter_outputs.jld2"; parsed_iter_outputs = parsed_iter_outputs)
+
+parsed_iter_outputs = load("parsed_iter_outputs.jld2", "parsed_iter_outputs")

@@ -1,29 +1,27 @@
-# --------------------------------------------------------------------------------------------------------------
-# GeneralTempoParameter: Representation of parameters in TEMPO/TEMPO2 .par files
-#
-# This module defines the main parameter type used to represent individual timing model parameters in
-# TEMPO/TEMPO2 .par files. Each parameter can carry a value, flag, and uncertainty.
-#
-# Provides:
-# - A structured, optionally mutable type to store parameter values
-# - Parsing logic to read from .par files and convert values correctly
-# - Pretty-printing and serialization to .par file format
-# - Utility functions for parameter update and merge
+# TempoParameters.jl
+# Utilities for representing and parsing TEMPO/TEMPO2 .par parameters.
 
-# --------------------------------------------------------------------------------------------------------------
+using Printf
+using Statistics
 
-# Set precision for BigFloat to 80 digits
+# Keep higher precision for BigFloat arithmetic/printing (consistent with your previous code)
 setprecision(BigFloat, 80)
+
+# ------------------------------------------------------------------------------
+# Type
+# ------------------------------------------------------------------------------
 
 """
     GeneralTempoParameter
 
-Represents a parameter from a TEMPO `.par` file. Each parameter consists of:
-- `name`: full name of the parameter as a string,
-- `name_symbol`: the corresponding symbol version of the name,
-- `value`: parameter value (can be `Int`, `BigFloat`, `String`, or `nothing`),
-- `flag`: optional integer flag used by TEMPO to fix/free the parameter,
-- `uncertainty`: optional measurement uncertainty (stored as `BigFloat`).
+Parameter from a TEMPO/TEMPO2 `.par` file.
+
+Fields
+- `name::String`        — canonical parameter name (may include spaces, e.g. "JUMP -be SCAMP")
+- `name_symbol::Symbol` — cached symbol version of `name`
+- `value::Union{Int64, BigFloat, String, Nothing}`
+- `flag::Union{Int64, Nothing}`           — fit flag (typically -1, 0, 1), optional
+- `uncertainty::Union{BigFloat, Nothing}` — 1σ uncertainty, optional
 """
 mutable struct GeneralTempoParameter
     name::String
@@ -36,218 +34,270 @@ end
 const TP = GeneralTempoParameter
 
 """
-    GeneralTempoParameter(name::String, value::Union{...}; flag=..., uncertainty=...)
-
-Convenient constructor for `GeneralTempoParameter`, converting `Float64` values to `BigFloat`
-and assigning optional `flag` and `uncertainty` fields.
+Convenient constructor. Accepts `AbstractString` for name (e.g. `SubString`), stores as `String`.
+Promotes any `Real` value/uncertainty to `BigFloat`.
 """
-function GeneralTempoParameter(name::String, value::Union{Int64, Float64, BigFloat, String, Nothing}=nothing; flag::Union{Int64, Nothing}=nothing, uncertainty::Union{Float64, BigFloat, Nothing}=nothing)
-    name_symbol = Symbol(name)  # Convert name to symbol
-    big_value = isa(value, Float64) ? BigFloat(value) : value
-    big_uncertainty = isnothing(uncertainty) ? nothing : BigFloat(uncertainty)
-    return GeneralTempoParameter(name, name_symbol, big_value, flag, big_uncertainty)
+function GeneralTempoParameter(
+    name::AbstractString,
+    value::Union{Int64, Real, BigFloat, String, Nothing}=nothing;
+    flag::Union{Int64, Nothing}=nothing,
+    uncertainty::Union{Real, BigFloat, Nothing}=nothing
+)
+    promoted = value isa Integer      ? Int(value) :
+               value isa AbstractFloat ? BigFloat(value) :
+               value
+    return GeneralTempoParameter(
+        String(name),
+        Symbol(String(name)),
+        promoted,
+        flag,
+        uncertainty === nothing ? nothing : BigFloat(uncertainty)
+    )
 end
 
-"""
-    Base.setproperty!(x::GeneralTempoParameter, f::Symbol, v::Float64)
-
-Automatically converts assigned `Float64` values to `BigFloat` when modifying `value` or `uncertainty`.
-"""
-function Base.setproperty!(x::GeneralTempoParameter, f::Symbol, v::Float64)
-    if f === :value || f === :uncertainty
-        v = BigFloat(v)
+# Keep `name`/`name_symbol` in sync; promote numerics for `value`/`uncertainty`.
+function Base.setproperty!(p::GeneralTempoParameter, f::Symbol, v)
+    if f === :name
+        setfield!(p, :name, String(v))
+        setfield!(p, :name_symbol, Symbol(p.name))
+        return v
+    elseif f === :name_symbol
+        setfield!(p, :name_symbol, Symbol(v))
+        setfield!(p, :name, String(p.name_symbol))
+        return v
+    elseif f === :value
+        v2 = v isa Integer ? Int(v) :
+             v isa AbstractFloat ? BigFloat(v) : v
+        setfield!(p, :value, v2)
+        return v
+    elseif f === :uncertainty
+        setfield!(p, :uncertainty, v === nothing ? nothing : BigFloat(v))
+        return v
+    else
+        return setfield!(p, f, v)
     end
-    setfield!(x, f, v)
 end
 
-
-# Constructor to convert from ValueVariable type
-# GeneralTempoParameter(var::ValueVariable) = GeneralTempoParameter(var.name, var.value)
-
-# Display function for GeneralTempoParameter
 function Base.show(io::IO, param::GeneralTempoParameter)
     indent = get(io, :indent, 0)
     print(io, " "^indent, param.name)
 
-    # Formatted output for BigFloat values
-    if param.value isa BigFloat
-        print(io, " ", @sprintf("%.10g", param.value))
+    val = param.value
+    if val isa BigFloat
+        # compact but without losing precision to Float64
+        if abs(val) < big"1e-3" || abs(val) > big"1e6"
+            print(io, " ", @sprintf("%.10e", val))
+        else
+            print(io, " ", @sprintf("%.10g", val))
+        end
     else
-        print(io, " ", param.value)
+        print(io, " ", val)
     end
 
     if param.flag !== nothing
         print(io, " ", param.flag)
     end
 
-    # Formatted output for BigFloat uncertainties
     if param.uncertainty !== nothing
-        if param.uncertainty isa BigFloat
-            print(io, " ±", @sprintf("%.10g", param.uncertainty))
+        u = param.uncertainty
+        if u isa BigFloat
+            if abs(u) < big"1e-3" || abs(u) > big"1e6"
+                print(io, " ±", @sprintf("%.10e", u))
+            else
+                print(io, " ±", @sprintf("%.10f", u))
+            end
         else
-            print(io, " ±", param.uncertainty)
+            print(io, " ±", u)
         end
     end
-
     return nothing
 end
 
-"""
-    parse_tempo_parameter_field(str)
+# ------------------------------------------------------------------------------
+# Parsing
+# ------------------------------------------------------------------------------
 
-Parses a string value from a `.par` line field and returns an `Int64`, `BigFloat`, or `String`.
-Used during line parsing for type inference.
 """
-function parse_tempo_parameter_field(value_str)
-    value_int64 = tryparse(Int64, value_str)
-    if value_int64 !== nothing
-        return value_int64
-    end
+    parse_tempo_parameter_field(str) -> Int64 | BigFloat | String
 
-    value_bigfloat = tryparse(BigFloat, value_str)
-    if value_bigfloat !== nothing
-        return value_bigfloat
-    end
-    
+Try `Int64`, then `BigFloat`, otherwise return `String`.
+"""
+function parse_tempo_parameter_field(value_str::AbstractString)
+    (v = tryparse(Int64, value_str))    !== nothing && return v
+    (v = tryparse(BigFloat, value_str)) !== nothing && return v
     return String(value_str)
 end
 
 """
-    extract_tempo_parameter_from_line(line::String) -> GeneralTempoParameter
+    extract_tempo_parameter_from_line(line) -> GeneralTempoParameter
 
-Parses a line from a `.par` file into a `GeneralTempoParameter`. Supports parameters with:
-- single-word or three-word names,
-- optional flag and uncertainty,
-- scientific or fixed-point formats.
+Parse one `.par` line using a simple grammar:
+
+- `name` is either 1 token, or **3 tokens** if the first three tokens are non-numeric strings
+  (e.g. "JUMP -be SCAMP", "TNEF -be SCAMP").
+- Then go: `value` (String/Int64/BigFloat), optional `flag` (Int64), optional `uncertainty` (BigFloat).
+- If there is one trailing token after value:
+    * Int64 → it's a flag
+    * BigFloat → it's an uncertainty
+- If there are two trailing tokens after value and they look like `Int64` then `BigFloat`,
+  treat them as `flag` and `uncertainty` respectively.
 """
-function extract_tempo_parameter_from_line(line::String)
-    line_split = split(line)
-    n = length(line_split)
-    line_parsed = parse_tempo_parameter_field.(line_split)
-    line_parsed_types = typeof.(line_parsed)
+function extract_tempo_parameter_from_line(line::AbstractString)
+    toks = split(strip(line))
+    n = length(toks)
+    n == 0 && error("Empty .par line")
 
-    # Название параметра: 1 или 3 слова
-    if n >= 3 && line_parsed_types[1:3] == [String, String, String]
+    parsed = parse_tempo_parameter_field.(toks)
+    types  = typeof.(parsed)
+
+    # name: 3-string tokens → 3-word name, else 1-word name
+    if n >= 3 && types[1] === String && types[2] === String && types[3] === String
         n_name = 3
-        name = join(line_split[1:3], " ")
+        name = String(join(toks[1:3], " "))
     else
         n_name = 1
-        name = String(line_split[1])
+        name = String(toks[1])
     end
 
-    value = n > n_name ? line_parsed[n_name + 1] : nothing
+    # value
+    value = n > n_name ? parsed[n_name + 1] : nothing
 
     flag = nothing
-    uncertainty = nothing
+    unc  = nothing
+    rest = n - n_name - 1  # tokens after value
 
-    # остались ≥ 2 слова? → value + flag
-    if n > n_name + 1
-        maybe_flag_or_uncertainty = line_parsed[n_name + 2]
-        if isa(maybe_flag_or_uncertainty, BigFloat)
-            uncertainty = maybe_flag_or_uncertainty
-        else
-            flag = maybe_flag_or_uncertainty
+    if rest == 1
+        t2 = parsed[n_name + 2]
+        if t2 isa BigFloat
+            unc = t2
+        elseif t2 isa Int64
+            flag = t2
         end
+    elseif rest >= 2
+        t2 = parsed[n_name + 2]
+        t3 = parsed[n_name + 3]
+        if (t2 isa Int64) && (t3 isa BigFloat)
+            flag = t2
+            unc  = t3
+        elseif t2 isa BigFloat
+            # value + uncertainty (no flag)
+            unc = t2
+        end
+        # extra tokens (if any) are ignored deliberately
     end
 
-    # осталась ещё одна штука после флага? → uncertainty
-    if n > n_name + 2 && flag !== nothing
-        maybe_uncertainty = line_parsed[n_name + 3]
-        if isa(maybe_uncertainty, BigFloat)
-            uncertainty = maybe_uncertainty
-        end
-    end
-
-    return GeneralTempoParameter(name, value, flag=flag, uncertainty=uncertainty)
+    return GeneralTempoParameter(name, value; flag=flag, uncertainty=unc)
 end
 
+# ------------------------------------------------------------------------------
+# Formatting to .par
+# ------------------------------------------------------------------------------
+
+const PAR_NAME_W   = 23
+const PAR_VALUE_W  = 32
+const PAR_FLAG_W   = 6
+const PAR_UNCERT_W = 32
+
+_pad(s::AbstractString, w::Int) = (length(s) >= w ? String(s) : String(s) * " "^(w - length(s)))
+
+# Back-compat alias for any old calls
+align_str(s::String, w::Int) = _pad(s, w)
 
 """
-    align_str(s::String, width::Int) -> String
+    get_par_file_representation(param) -> String
 
-Pads a string with spaces to a fixed width. Used for alignment in `.par` file formatting.
-"""
-function align_str(s::String, n::Int)
-    return s * " "^max(n - length(s), 1)
-end
-
-"""
-    get_par_file_representation(param::GeneralTempoParameter) -> String
-
-Returns a formatted string representation of a parameter suitable for writing to a `.par` file.
-Includes name, value, flag (if present), and uncertainty (if present), using scientific notation when needed.
+Return a fixed-width `.par` line: name, value, optional flag, optional uncertainty.
+No precision is lost: `BigFloat` values are formatted directly as BigFloat.
 """
 function get_par_file_representation(param::GeneralTempoParameter)
-    n_name  = (param.value isa BigFloat && param.value < 0) ? 22 : 23
-    n_value = (param.value isa BigFloat && param.value < 0) ? 33 : 32
-    n_flag = 6
-    n_uncertainty = 32
+    # Negative numbers take one extra column; mirror your old alignment trick
+    n_name  = (param.value isa BigFloat && param.value < 0) ? 22 : PAR_NAME_W
+    n_value = (param.value isa BigFloat && param.value < 0) ? 33 : PAR_VALUE_W
+    n_flag  = PAR_FLAG_W
+    n_unc   = PAR_UNCERT_W
 
     line = align_str(param.name, n_name)
 
-
-    # If the value is a BigFloat, use @sprintf for formatting
+    # value (keep BigFloat, no downcast)
     if param.value isa BigFloat
-        if abs(param.value) < 1e-3 || abs(param.value) > 1e6
+        if abs(param.value) < big"1e-3" || abs(param.value) > big"1e6"
             line *= align_str(@sprintf("%.21e", param.value), n_value)
-        else 
+        else
             line *= align_str(@sprintf("%.21g", param.value), n_value)
         end
     else
         line *= align_str(string(param.value), n_value)
     end
 
+    # flag
     if param.flag !== nothing
-        line *= string(param.flag) * "  "
+        line *= align_str(string(param.flag), n_flag)
     else
-        line *= "   "
+        line *= " "^n_flag
     end
 
-    # If uncertainty is a BigFloat, use @sprintf for formatting
+    # uncertainty (keep BigFloat, no downcast; decide e/f by magnitude of uncertainty)
     if param.uncertainty !== nothing
-        if param.uncertainty isa BigFloat && (abs(param.uncertainty) < 1e-3 || abs(param.uncertainty) > 1e6)
-            line *= align_str(@sprintf("%.21e", param.uncertainty), n_uncertainty)
+        u = param.uncertainty
+        if u isa BigFloat && (abs(u) < big"1e-3" || abs(u) > big"1e6")
+            line *= align_str(@sprintf("%.21e", u), n_unc)
         else
-            line *= align_str(@sprintf("%.21f", param.uncertainty), n_uncertainty)
+            line *= align_str(@sprintf("%.21f", u), n_unc)
         end
     end
 
     return line
 end
 
-"""
-    update_or_add_tempo_parameter!(params, param)
+# ------------------------------------------------------------------------------
+# Updates
+# ------------------------------------------------------------------------------
 
-Updates an existing parameter in a vector `params` if found by name. Otherwise, appends it.
-Returns the modified vector (same reference).
+"""
+    update_or_add_tempo_parameter!(params, param) -> Vector{GeneralTempoParameter}
+
+Update by name or append if not present. Keeps order. Modifies `params` in place.
 """
 function update_or_add_tempo_parameter!(params::Vector{GeneralTempoParameter}, param::GeneralTempoParameter)
-    # Поиск параметра в списке
-    found = false
-    for (i, existing_param) in enumerate(params)
-        if existing_param.name == param.name
-            params[i] = param # Обновление значения параметра
-            found = true
-            break
+    @inbounds for i in eachindex(params)
+        if params[i].name == param.name
+            params[i] = param
+            return params
         end
     end
-
-    # Добавление параметра, если он не был найден
-    if !found
-        push!(params, param)
-    end
-
+    push!(params, param)
     return params
 end
 
 """
-    update_many_tempo_parameters!(params, new_params)
+    update_many_tempo_parameters!(params, new_params) -> Vector{GeneralTempoParameter}
 
-Applies `update_or_add_tempo_parameter!` to each element of `new_params`.
-Modifies `params` in-place.
+Apply `update_or_add_tempo_parameter!` for each element of `new_params`.
 """
 function update_many_tempo_parameters!(params::Vector{GeneralTempoParameter}, new_params::Vector{GeneralTempoParameter})
-    for p in new_params
-        update_or_add_tempo_parameter(params, p)
+    @inbounds for p in new_params
+        update_or_add_tempo_parameter!(params, p)
     end
+    return params
+end
+
+"""
+    update_params_by_dict!(params, dict::Dict{Symbol,GeneralTempoParameter}) -> Vector{GeneralTempoParameter}
+
+Batch update by `name_symbol`. Preserves original order; missing keys are appended.
+"""
+function update_params_by_dict!(params::Vector{GeneralTempoParameter}, dict::Dict{Symbol,GeneralTempoParameter})
+    idx = Dict{Symbol,Int}()
+    @inbounds for (i, p) in pairs(params)
+        idx[p.name_symbol] = i
+    end
+    for (k, p) in dict
+        if haskey(idx, k)
+            params[idx[k]] = p
+        else
+            push!(params, p)
+            idx[k] = length(params)
+        end
+    end
+    return params
 end
