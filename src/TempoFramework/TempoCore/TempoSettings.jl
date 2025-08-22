@@ -49,14 +49,15 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", f::TempoRunFiles)
     indent = get(io, :indent, 0)
-    pad = " "^indent
-    println(io, pad, "TempoRunFiles")
-    println(io, pad, "  work_dir:         ", f.work_dir)
-    println(io, pad, "  par_file_input:   ", f.par_file_input)
-    println(io, pad, "  par_file_output:  ", f.par_file_output)
-    println(io, pad, "  tim_file:         ", f.tim_file)
-end
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
 
+    println(io, pad, "TempoRunFiles")
+    println(io, spad, "work_dir:        ", f.work_dir)
+    println(io, spad, "par_file_input:  ", f.par_file_input)
+    println(io, spad, "par_file_output: ", f.par_file_output)
+    println(io, spad, "tim_file:        ", f.tim_file)
+end
 # Case-insensitive `.par` handling
 _par_stripped(name::AbstractString) = replace(name, r"\.[Pp][Aa][Rr]$" => "")
 
@@ -105,7 +106,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", opts::TempoExecutionOptions)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "TempoExecutionOptions")
 
     # inline tempo_version (one line, no parentheses)
@@ -151,7 +152,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", mods::TempoRunModifiers)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "TempoRunModifiers")
     println(io, pad, "  override_params: ", length(mods.override_params), " parameter(s)")
     for p in mods.override_params
@@ -192,7 +193,7 @@ TempoRunBehavior(; write_output::Bool=true,
 
 function Base.show(io::IO, ::MIME"text/plain", b::TempoRunBehavior)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "TempoRunBehavior")
     println(io, pad, "  write_output:             ", b.write_output)
     println(io, pad, "  write_residuals:          ", b.write_residuals)
@@ -228,7 +229,7 @@ WhiteNoiseAnalysisOptions(; enabled::Bool=false, scope::Symbol=:final) =
 
 function Base.show(io::IO, ::MIME"text/plain", wn::WhiteNoiseAnalysisOptions)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "WhiteNoiseAnalysisOptions")
     println(io, pad, "  enabled: ", wn.enabled)
     println(io, pad, "  scope:   ", wn.scope)
@@ -261,7 +262,7 @@ ProcessOptions(; timeout_s=nothing, cleanup_before_run::Bool=true, temp_dir::Uni
 
 function Base.show(io::IO, ::MIME"text/plain", p::ProcessOptions)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "ProcessOptions")
     println(io, pad, "  timeout_s:          ", p.timeout_s)
     println(io, pad, "  cleanup_before_run: ", p.cleanup_before_run)
@@ -283,7 +284,7 @@ LoggingOptions(; verbosity::Int=1, with_timestamps::Bool=true) =
 
 function Base.show(io::IO, ::MIME"text/plain", l::LoggingOptions)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     println(io, pad, "LoggingOptions")
     println(io, pad, "  verbosity:       ", l.verbosity)
     println(io, pad, "  with_timestamps: ", l.with_timestamps)
@@ -318,7 +319,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", s::BasicTempoSettings)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     next = indent + 4
 
     println(io, pad, "BasicTempoSettings")

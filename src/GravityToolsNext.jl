@@ -7,6 +7,7 @@ using StructArrays
 using Statistics
 using StatsBase
 using Distributions
+using KernelDensity
 using HypothesisTests
 using LinearAlgebra
 using Roots
@@ -19,7 +20,7 @@ using Optim
 # using QuadGK
 
 
-# Подмодули ядра
+# TempoFramework/TempoCore
 include("TempoFramework/TempoCore/AbstractTempo.jl")
 include("TempoFramework/TempoCore/TempoParameters.jl")
 include("TempoFramework/TempoCore/TempoParFile.jl")
@@ -31,11 +32,15 @@ include("TempoFramework/TempoCore/TempoSettings.jl")
 include("TempoFramework/TempoCore/TempoRun.jl")
 include("TempoFramework/TempoCore/TempoWhiteNoise.jl")
 
-# Настройки
-# include("TempoFramework/Settings/BasicTempoSettings.jl")
+# TempoFramework/Prior
+include("TempoFramework/Prior/PriorSpecs.jl")
+include("TempoFramework/Prior/NodeRules.jl")
+include("TempoFramework/Prior/PriorSettings.jl")
 
-# Запуск
-include("TempoFramework/SingleTasks/BasicTempoRun.jl")
+# TempoFramework/SingleTasks
+include("TempoFramework/SingleTasks/BasicTempoTask.jl")
+include("TempoFramework/SingleTasks/IterativeTempoTask.jl")
+include("TempoFramework/SingleTasks/PriorMarginalizedTempoTask.jl")
 
 include("Exports.jl")
 

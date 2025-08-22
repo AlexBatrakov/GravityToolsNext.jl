@@ -41,19 +41,22 @@ end
 
 function Base.show(io::IO, basic::BasicTempoOutput)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Basic Tempo Output:")
-    println(io, ' '^(indent+4), "RMS Pre-fit Residual (µs): ", basic.rms_pre_fit_residual_us)
-    println(io, ' '^(indent+4), "RMS Post-fit Residual (µs): ", basic.rms_post_fit_residual_us)
-    println(io, ' '^(indent+4), "RMS TN Post-fit Residual (µs): ", basic.rms_tn_post_fit_residual_us)
-    println(io, ' '^(indent+4), "Chisq: ", basic.chisqr)
-    println(io, ' '^(indent+4), "Nfree: ", basic.nfree)
-    println(io, ' '^(indent+4), "Chisq/Nfree: ", basic.chisqr_red)
-    println(io, ' '^(indent+4), "Pre/Post: ", basic.pre_post)
-    println(io, ' '^(indent+4), "Number of Fit Parameters: ", basic.number_of_fit_parameters)
-    println(io, ' '^(indent+4), "Number of Points in Fit: ", basic.number_of_points_in_fit)
-    println(io, ' '^(indent+4), "Offset value: ", basic.offset_value)
-    println(io, ' '^(indent+4), "Offset error: ", basic.offset_error)
-    println(io, ' '^(indent+4), "Offset E * sqrt(n): ", basic.offset_e_sqrt_n)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+    
+    println(io, pad,  "Basic Tempo Output:")
+    println(io, spad, "RMS Pre-fit Residual (µs): ", basic.rms_pre_fit_residual_us)
+    println(io, spad, "RMS Post-fit Residual (µs): ", basic.rms_post_fit_residual_us)
+    println(io, spad, "RMS TN Post-fit Residual (µs): ", basic.rms_tn_post_fit_residual_us)
+    println(io, spad, "Chisq: ", basic.chisqr)
+    println(io, spad, "Nfree: ", basic.nfree)
+    println(io, spad, "Chisq/Nfree: ", basic.chisqr_red)
+    println(io, spad, "Pre/Post: ", basic.pre_post)
+    println(io, spad, "Number of Fit Parameters: ", basic.number_of_fit_parameters)
+    println(io, spad, "Number of Points in Fit: ", basic.number_of_points_in_fit)
+    println(io, spad, "Offset value: ", basic.offset_value)
+    println(io, spad, "Offset error: ", basic.offset_error)
+    print(io,   spad, "Offset E * sqrt(n): ", basic.offset_e_sqrt_n)
 end
 
 # --------------------------------------------------------------------------------------------------------------
@@ -89,7 +92,9 @@ end
 
 function Base.show(io::IO, p::FitParameter)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, p.name,
+    pad = repeat(" ", indent)
+
+    println(io, pad, p.name,
         "  Pre-fit: ", p.pre_fit,
         "  Post-fit: ", p.post_fit,
         "  Unc: ", p.uncertainty,
@@ -121,9 +126,12 @@ Base.:(==)(a::TempoOutputError, b::TempoOutputError) =
 
 function Base.show(io::IO, e::TempoOutputError)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Tempo Output Error:")
-    println(io, ' '^(indent+4), "Error type: ", e.error_type)
-    println(io, ' '^(indent+4), "Error message: ", e.message)
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Tempo Output Error:")
+    println(io, spad, "Error type: ", e.error_type)
+    println(io, spad, "Error message: ", e.message)
 end
 
 # --------------------------------------------------------------------------------------------------------------

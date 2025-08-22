@@ -121,7 +121,7 @@ Pretty-print `Tempo`/`Tempo2`. Supports inline one-liner via IOContext key `:inl
 """
 function Base.show(io::IO, ::MIME"text/plain", v::AbstractTempoVersion)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
     inline = get(io, :inline, false)
 
     name = _tempo_version_name(v)

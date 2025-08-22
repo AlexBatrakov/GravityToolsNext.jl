@@ -1,19 +1,19 @@
-# TempoFramework/SingleTasks/BasicTempoRun.jl
+# TempoFramework/SingleTasks/BasicTempoTask.jl
 
 """
-    BasicTempoRun(settings::BasicTempoSettings)
+    BasicTempoTask(settings::BasicTempoSettings)
 
-Single TEMPO/TEMPO2 run with parsed iterations, optional residual statistics,
+Single TEMPO/TEMPO2 task with parsed iterations, optional residual statistics,
 and optional white-noise analysis controlled by `settings.analysis`.
 """
-struct BasicTempoRun <: SingleTempoTask
+struct BasicTempoTask <: SingleTempoTask
     settings::BasicTempoSettings
 end
 
-function Base.show(io::IO, ::MIME"text/plain", run::BasicTempoRun)
-    println(io, "BasicTempoRun")
+function Base.show(io::IO, ::MIME"text/plain", task::BasicTempoTask)
+    println(io, "BasicTempoTask")
     println(io, "  settings:")
-    show(IOContext(io, :indent => 4), MIME"text/plain"(), run.settings)
+    show(IOContext(io, :indent => 4), MIME"text/plain"(), task.settings)
 end
 
 # --- helpers ----------------------------------------------------------------------------------------------------
@@ -74,13 +74,13 @@ function _wn_mask(niter::Int, scope::Symbol)
 end
 
 """
-    run_task(task::BasicTempoRun) -> GeneralTempoResult
+    run_task(task::BasicTempoTask) -> GeneralTempoResult
 
 Run TEMPO/TEMPO2 using `task.settings`, parse iteration-wise outputs, attach
 residual/TIM-derived statistics, optionally perform white-noise fitting, and
 return an aggregated `GeneralTempoResult`.
 """
-function run_task(task::BasicTempoRun)::GeneralTempoResult
+function run_task(task::BasicTempoTask)::GeneralTempoResult
     s = task.settings
 
     # 1) Run TEMPO and parse iteration-wise outputs

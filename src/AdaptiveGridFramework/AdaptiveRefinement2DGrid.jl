@@ -14,11 +14,14 @@ LocalMinimaUnit(name; min = -Inf, max = Inf, from_min = true) = LocalMinimaUnit(
 
 function Base.show(io::IO, ru::LocalMinimaUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Local mimima unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    println(io, ' '^(indent+4), "Maximum value: ", ru.max)
-    print(io,   ' '^(indent+4), "From min value: ", ru.from_min)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Local mimima unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    println(io, spad, "Maximum value: ", ru.max)
+    print(io,   spad, "From min value: ", ru.from_min)
 	return nothing
 end
 
@@ -32,10 +35,13 @@ FullUnit(name; min = -Inf, max = Inf) = FullUnit(name, min, max)
 
 function Base.show(io::IO, ru::FullUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Full refinement unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    print(io,   ' '^(indent+4), "Maximum value: ", ru.max)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Full refinement unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    print(io,   spad, "Maximum value: ", ru.max)
 	return nothing
 end
 
@@ -51,12 +57,15 @@ DiffUnit(name; min = -Inf, max = Inf, diff = diff, from_min = true) = DiffUnit(n
 
 function Base.show(io::IO, ru::DiffUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Difference refinement unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    println(io, ' '^(indent+4), "Maximum value: ", ru.max)
-    println(io, ' '^(indent+4), "Maximal difference: ", ru.diff)
-    print(io,   ' '^(indent+4), "From min value: ", ru.from_min)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Difference refinement unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    println(io, spad, "Maximum value: ", ru.max)
+    println(io, spad, "Maximal difference: ", ru.diff)
+    print(io,   spad, "From min value: ", ru.from_min)
 	return nothing
 end
 
@@ -72,12 +81,15 @@ RelDiffUnit(name; min = -Inf, max = Inf, rel_diff = rel_diff, from_min = true) =
 
 function Base.show(io::IO, ru::RelDiffUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Relative difference refinement unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    println(io, ' '^(indent+4), "Maximum value: ", ru.max)
-    println(io, ' '^(indent+4), "Maximal relative difference: ", ru.rel_diff)
-    print(io,   ' '^(indent+4), "From min value: ", ru.from_min)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Relative difference refinement unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    println(io, spad, "Maximum value: ", ru.max)
+    println(io, spad, "Maximal relative difference: ", ru.rel_diff)
+    print(io,   spad, "From min value: ", ru.from_min)
 	return nothing
 end
 
@@ -93,12 +105,15 @@ ContourUnit(name; min = -Inf, max = Inf, contours = contours, from_min = true) =
 
 function Base.show(io::IO, ru::ContourUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Contour refinement unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    println(io, ' '^(indent+4), "Maximum value: ", ru.max)
-    println(io, ' '^(indent+4), "Contour levels: ", ru.contours)
-    print(io,   ' '^(indent+4), "From min value: ", ru.from_min)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Contour refinement unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    println(io, spad, "Maximum value: ", ru.max)
+    println(io, spad, "Contour levels: ", ru.contours)
+    print(io,   spad, "From min value: ", ru.from_min)
 	return nothing
 end
 
@@ -115,13 +130,16 @@ DiffContourUnit(name; min = -Inf, max = Inf, diffs = diffs, contours = contours,
 
 function Base.show(io::IO, ru::DiffContourUnit)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Difference and contour refinement unit:")
-    println(io, ' '^(indent+4), "Name of variable: ", ru.name)
-    println(io, ' '^(indent+4), "Minimum value: ", ru.min)
-    println(io, ' '^(indent+4), "Maximum value: ", ru.max)
-    println(io, ' '^(indent+4), "Maximal differences: ", ru.diffs)
-    println(io, ' '^(indent+4), "Contour levels: ", ru.contours)
-    print(io,   ' '^(indent+4), "From min value: ", ru.from_min)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Difference and contour refinement unit:")
+    println(io, spad, "Name of variable: ", ru.name)
+    println(io, spad, "Minimum value: ", ru.min)
+    println(io, spad, "Maximum value: ", ru.max)
+    println(io, spad, "Maximal differences: ", ru.diffs)
+    println(io, spad, "Contour levels: ", ru.contours)
+    print(io,   spad, "From min value: ", ru.from_min)
 	return nothing
 end
 
@@ -137,10 +155,13 @@ end
 
 function Base.show(io::IO, ref_sets::RefinementSettings{T}) where {T}
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "Grid Refinement settings:")
-    println(io, ' '^(indent+4), "Parameters to save: ", ref_sets.params_to_save)
-	println(io, ' '^(indent+4), "Desired refinement level: ", ref_sets.desired_refinement_level)
-    println(io, ' '^(indent+4), "Parallel computation: ", ref_sets.parallel)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+    
+    println(io, pad,  "Grid Refinement settings:")
+    println(io, spad, "Parameters to save: ", ref_sets.params_to_save)
+	println(io, spad, "Desired refinement level: ", ref_sets.desired_refinement_level)
+    println(io, spad, "Parallel computation: ", ref_sets.parallel)
     for i in 1:length(ref_sets.units)-1
         println(IOContext(io, :indent => indent+4), ref_sets.units[i])
     end
@@ -181,14 +202,17 @@ end
 
 function Base.show(io::IO, grid::AdaptiveRefinement2DGrid)
     indent = get(io, :indent, 0)
-    println(io, ' '^indent, "AdaptiveRefinement2DGrid:")
-	println(io, ' '^(indent+4), "Variables: ", keys(grid.vars))
-    println(io, ' '^(indent+4), "Parameters: ", grid.params)
-    println(io, ' '^(indent+4), "Minimal values: ", grid.min)
-    println(io, ' '^(indent+4), "Maximal values: ", grid.max)
-    println(io, ' '^(indent+4), "X axis: ", grid.x)
-    println(io, ' '^(indent+4), "Y axis: ", grid.y)
-    print(IOContext(io, :indent => indent+4), grid.ref_sets)
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+    
+    println(io, pad,  "AdaptiveRefinement2DGrid:")
+	println(io, spad, "Variables: ", keys(grid.vars))
+    println(io, spad, "Parameters: ", grid.params)
+    println(io, spad, "Minimal values: ", grid.min)
+    println(io, spad, "Maximal values: ", grid.max)
+    println(io, spad, "X axis: ", grid.x)
+    println(io, spad, "Y axis: ", grid.y)
+    print(IOContext(io, :indent => indent+2), grid.ref_sets)
 	return nothing
 end
 

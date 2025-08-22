@@ -42,14 +42,16 @@ end
 
 function Base.show(io::IO, s::BasicResidualStats)
     indent = get(io, :indent, 0)
-    pad = " "^indent
-    println(io, pad, "Basic residual stats:")
-    println(io, pad, "  n      = ", s.n)
-    println(io, pad, "  min    = ", @sprintf("%.5f", s.min),    "   max   = ", @sprintf("%.5f", s.max))
-    println(io, pad, "  mean   = ", @sprintf("%.5f", s.mean),   "   wmean = ", @sprintf("%.5f", s.wmean))
-    println(io, pad, "  median = ", @sprintf("%.5f", s.median), "   mad   = ", @sprintf("%.5f", s.mad))
-    println(io, pad, "  rms    = ", @sprintf("%.5f", s.rms),    "   wrms  = ", @sprintf("%.5f", s.wrms))
-    println(io, pad, "  std    = ", @sprintf("%.5f", s.std),    "   wstd  = ", @sprintf("%.5f", s.wstd))
+    pad = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "Basic residual stats:")
+    println(io, spad, "n      = ", s.n)
+    println(io, spad, "min    = ", @sprintf("%.5f", s.min),    "   max   = ", @sprintf("%.5f", s.max))
+    println(io, spad, "mean   = ", @sprintf("%.5f", s.mean),   "   wmean = ", @sprintf("%.5f", s.wmean))
+    println(io, spad, "median = ", @sprintf("%.5f", s.median), "   mad   = ", @sprintf("%.5f", s.mad))
+    println(io, spad, "rms    = ", @sprintf("%.5f", s.rms),    "   wrms  = ", @sprintf("%.5f", s.wrms))
+    println(io, spad, "std    = ", @sprintf("%.5f", s.std),    "   wstd  = ", @sprintf("%.5f", s.wstd))
 end
 
 # Unweighted
@@ -387,7 +389,7 @@ end
 
 function Base.show(io::IO, entry::ResidualStatisticsEntry)
     indent = get(io, :indent, 0)
-    pad = " "^indent
+    pad = repeat(" ", indent)
 
     println(io, pad, "All TOAs:")
     show(IOContext(io, :indent => indent + 2), entry.all)

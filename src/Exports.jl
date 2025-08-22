@@ -98,6 +98,23 @@ export find_EFAC_for_fixed_EQUAD_and_std!
 export estimate_WhiteNoise_AD_with_offset
 
 # ---------------------------------------------
-# SingleTasks / BasicTempoRun.jl (TempoFramework)
+# SingleTasks / BasicTempoTask.jl (TempoFramework)
 # ---------------------------------------------
-export BasicTempoRun
+export BasicTempoTask
+
+
+# -------------------------------
+# TempoFramework / Prior
+# -------------------------------
+export AbstractPriorSpec, AnalyticPrior, GridPrior, SampledPrior
+export validate_prior
+export prior_invcdf, prior_pdf, prior_logpdf, prior_support
+export prior_median, prior_quantile, prior_quantiles
+export read_prior_samples
+
+export AbstractNodeRule, ClenshawCurtisNodes, QuantileNodes, ExplicitThetaNodes, eval_nodes
+
+export PriorExecutionOptions, PriorMarginalizationSettings, tempo_flag, build_node_dirname, write_node_metadata
+
+
+

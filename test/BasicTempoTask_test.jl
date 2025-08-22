@@ -23,7 +23,7 @@ basic_settings = settings = BasicTempoSettings(
 
 # out = run_tempo_parsed(basic_settings)
 
-task = BasicTempoRun(basic_settings)
+task = BasicTempoTask(basic_settings)
 
 parsed_iter_outputs = run_tempo_parsed(settings)
 

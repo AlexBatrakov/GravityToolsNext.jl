@@ -80,7 +80,8 @@ end
 
 function Base.show(io::IO, param::GeneralTempoParameter)
     indent = get(io, :indent, 0)
-    print(io, " "^indent, param.name)
+    pad = repeat(" ", indent)
+    print(io, pad, param.name)
 
     val = param.value
     if val isa BigFloat

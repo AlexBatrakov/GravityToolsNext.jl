@@ -8,3 +8,6 @@ end
 
 abstract type MultiPointTask  <: AbstractTempoTask end
 
+function run_task(task::MultiPointTask)
+    error("run_task not implemented for $(typeof(task))")
+end
