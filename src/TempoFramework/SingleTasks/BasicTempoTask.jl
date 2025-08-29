@@ -11,16 +11,25 @@ struct BasicTempoTask <: SingleTempoTask
 end
 
 function Base.show(io::IO, ::MIME"text/plain", task::BasicTempoTask)
-    println(io, "BasicTempoTask")
-    println(io, "  settings:")
-    show(IOContext(io, :indent => 4), MIME"text/plain"(), task.settings)
+    indent = get(io, :indent, 0)
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+    iop    = IOContext(io, :indent => indent + 4)
+    println(io, pad,  "BasicTempoTask")
+    println(io, spad, "settings:")
+    show(iop, MIME"text/plain"(), task.settings)
 end
+
 
 # --- helpers ----------------------------------------------------------------------------------------------------
 
 # Resolve `.tim` path against work_dir if the path is relative
 _resolve_tim_path(s::BasicTempoSettings) =
     isabspath(s.files.tim_file) ? s.files.tim_file : joinpath(s.files.work_dir, s.files.tim_file)
+
+_resolve_par_input_path(s::BasicTempoSettings) =
+    isabspath(s.files.par_file_input) ? s.files.par_file_input :
+                                        joinpath(s.files.work_dir, s.files.par_file_input)
 
 # Pick residual file path for iteration `i`; prefer per-iteration files if present.
 # Falls back to `residuals.dat` only for the final iteration.
@@ -138,4 +147,42 @@ function run_task(task::BasicTempoTask)::GeneralTempoResult
     )
 
     return GeneralTempoResult(results; par_file_final=par_file_final, metadata=meta)
+end
+
+# ——— interface hook: where this task runs
+task_workdir(task::BasicTempoTask)::AbstractString = task.settings.files.work_dir
+
+# ——— interface hook: clone task with overrides and a new work_dir
+function task_with_overrides(task::BasicTempoTask,
+                             overrides::AbstractVector{TempoParameter};
+                             work_dir::AbstractString)::BasicTempoTask
+    s = task.settings
+    s2 = copy_with(s;
+        work_dir               = work_dir,
+        override_params_upsert = collect(overrides),
+    )
+    return BasicTempoTask(s2)
+end
+
+"""
+    task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString) -> Nothing
+
+Copy the input `.par` and `.tim` files into `node_dir` so the task can run
+with name-only file references.
+"""
+function task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString)
+    s = task.settings
+    mkpath(node_dir)
+
+    # par input
+    src_par = _resolve_par_input_path(s)
+    dst_par = joinpath(node_dir, basename(s.files.par_file_input))
+    cp(src_par, dst_par; force=true)
+
+    # tim file
+    src_tim = _resolve_tim_path(s)
+    dst_tim = joinpath(node_dir, basename(s.files.tim_file))
+    cp(src_tim, dst_tim; force=true)
+
+    return nothing
 end

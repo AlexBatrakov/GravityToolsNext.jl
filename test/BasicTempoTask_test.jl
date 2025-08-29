@@ -1,7 +1,7 @@
 using GravityToolsNext
 using JLD2
 
-basic_settings = settings = BasicTempoSettings(
+basic_settings = BasicTempoSettings(
     work_dir = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_GR",
     par_file_input = "DDSTG_GR_SCINT_RN84_test.par",
     par_file_output = "DDSTG_GR_SCINT_RN84_test_out.par",
@@ -23,10 +23,16 @@ basic_settings = settings = BasicTempoSettings(
 
 # out = run_tempo_parsed(basic_settings)
 
-task = BasicTempoTask(basic_settings)
+basic_task = BasicTempoTask(basic_settings)
 
-parsed_iter_outputs = run_tempo_parsed(settings)
+basic_task_result = run_task(basic_task)
+
+# jldsave("basic_task_result.jld2"; basic_task_result = basic_task_result)
+
+basic_task_result = load("basic_task_result.jld2", "basic_task_result")
+
+# parsed_iter_outputs = run_tempo_parsed(settings)
 
 # jldsave("parsed_iter_outputs.jld2"; parsed_iter_outputs = parsed_iter_outputs)
 
-parsed_iter_outputs = load("parsed_iter_outputs.jld2", "parsed_iter_outputs")
+# parsed_iter_outputs = load("parsed_iter_outputs.jld2", "parsed_iter_outputs")

@@ -22,13 +22,13 @@ abstract type AbstractTempoSettings end
 """
     TempoRunFiles
 
-Holds paths to files involved in a TEMPO run.
+Holds paths for a TEMPO run.
 
 Fields
-- `work_dir::String`        : Directory where the run will be executed
-- `par_file_input::String`  : Path to the input `.par` file (initial model)
-- `par_file_output::String` : Path to the output `.par` file (will be generated)
-- `tim_file::String`        : Path to the `.tim` file with TOAs
+- `work_dir::String`        : Absolute working directory for the run
+- `par_file_input::String`  : Input `.par` **file name or relative path** (resolved against `work_dir`)
+- `par_file_output::String` : Output `.par` **file name** to be written in `work_dir`
+- `tim_file::String`        : `.tim` **file name or relative path** (resolved against `work_dir`)
 """
 struct TempoRunFiles
     work_dir::String
@@ -129,17 +129,17 @@ end
 Describes modifications applied to the run.
 
 Fields
-- `override_params::Vector{GeneralTempoParameter}` : Parameters to override/inject into the `.par`
+- `override_params::Vector{TempoParameter}` : Parameters to override/inject into the `.par`
 - `time_start::Union{Nothing,Float64}`             : Optional lower bound on TOAs (MJD)
 - `time_finish::Union{Nothing,Float64}`            : Optional upper bound on TOAs (MJD)
 """
 struct TempoRunModifiers
-    override_params::Vector{GeneralTempoParameter}
+    override_params::Vector{TempoParameter}
     time_start::Union{Nothing, Float64}
     time_finish::Union{Nothing, Float64}
 end
 
-function TempoRunModifiers(override_params::Vector{GeneralTempoParameter}=GeneralTempoParameter[];
+function TempoRunModifiers(override_params::Vector{TempoParameter}=TempoParameter[];
                            time_start::Union{Nothing, Real}=nothing,
                            time_finish::Union{Nothing, Real}=nothing)
     ts = time_start === nothing ? nothing : Float64(time_start)
@@ -319,30 +319,25 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", s::BasicTempoSettings)
     indent = get(io, :indent, 0)
-    pad = repeat(" ", indent)
-    next = indent + 4
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+    iop    = IOContext(io, :indent => indent + 4)
 
     println(io, pad, "BasicTempoSettings")
-    println(io, pad, "  files:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.files)
-    println(io)
-    println(io, pad, "  options:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.options)
-    println(io)
-    println(io, pad, "  modifiers:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.modifiers)
-    println(io)
-    println(io, pad, "  behavior:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.behavior)
-    println(io)
-    println(io, pad, "  analysis:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.analysis)
-    println(io)
-    println(io, pad, "  process:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.process)
-    println(io)
-    println(io, pad, "  logging:")
-    show(IOContext(io, :indent => next), MIME"text/plain"(), s.logging)
+    println(io, spad, "files:")
+    show(iop, MIME"text/plain"(), s.files)
+    println(io, spad, "options:")
+    show(iop, MIME"text/plain"(), s.options)
+    println(io, spad, "modifiers:")
+    show(iop, MIME"text/plain"(), s.modifiers)
+    println(io, spad, "behavior:")
+    show(iop, MIME"text/plain"(), s.behavior)
+    println(io, spad, "analysis:")
+    show(iop, MIME"text/plain"(), s.analysis)
+    println(io, spad, "process:")
+    show(iop, MIME"text/plain"(), s.process)
+    println(io, spad, "logging:")
+    show(iop, MIME"text/plain"(), s.logging)
 end
 
 # --------------------------------------------------------------------------------------------------------------
@@ -381,7 +376,7 @@ function BasicTempoSettings(;
     gain::Real = 1.0,
 
     # Modifiers
-    override_params::Vector{GeneralTempoParameter} = GeneralTempoParameter[],
+    override_params::Vector{TempoParameter} = TempoParameter[],
     time_start::Union{Nothing, Real} = nothing,
     time_finish::Union{Nothing, Real} = nothing,
 
@@ -414,26 +409,26 @@ function BasicTempoSettings(;
     modifiers = TempoRunModifiers(override_params, time_start, time_finish)
     behavior  = TempoRunBehavior(write_output, write_residuals, save_internal_iterations, save_residuals)
 
-    analysis′ = analysis !== nothing ?
+    analysis_new = analysis !== nothing ?
         analysis :
         WhiteNoiseAnalysisOptions(enabled = white_noise_enabled,
                                   scope   = _validate_wn_scope(white_noise_scope))
 
-    process′ = process !== nothing ?
+    process_new = process !== nothing ?
         process :
         ProcessOptions(timeout_s = timeout_s,
                        cleanup_before_run = cleanup_before_run,
                        temp_dir = temp_dir)
 
-    logging′ = logging !== nothing ?
+    logging_new = logging !== nothing ?
         logging :
         LoggingOptions(verbosity = Int(verbosity), with_timestamps = with_timestamps)
 
-    return BasicTempoSettings(files, options, modifiers, behavior, analysis′, process′, logging′)
+    return BasicTempoSettings(files, options, modifiers, behavior, analysis_new, process_new, logging_new)
 end
 
 # --------------------------------------------------------------------------------------------------------------
-# Copy with overrides
+# Copy with overrides (extended)
 # --------------------------------------------------------------------------------------------------------------
 
 """
@@ -442,6 +437,12 @@ end
 Create a modified copy of `s` with keyword overrides.
 You can override either whole sub-structs (`analysis`, `process`, `logging`)
 or individual convenience keys (e.g. `white_noise_enabled`, `timeout_s`, `verbosity`, ...).
+
+Additional override-params controls:
+- `override_params_clear::Bool=false`: start from an empty override list.
+- `override_params_delete`: names (Symbol/String or a collection of them) to remove from overrides.
+- `override_params_upsert::Vector{TempoParameter}=TP[]`: add/replace overrides by name.
+If `override_params` is provided, delete/upsert are applied on top of it.
 """
 function copy_with(s::BasicTempoSettings; kwargs...)
     # Files
@@ -456,8 +457,24 @@ function copy_with(s::BasicTempoSettings; kwargs...)
     nits            = get(kwargs, :nits, s.options.nits)
     gain            = Float64(get(kwargs, :gain, s.options.gain))
 
-    # Modifiers
-    override_params = get(kwargs, :override_params, s.modifiers.override_params)
+    # Modifiers — base vector and extended controls
+    base_overrides  = get(kwargs, :override_params, s.modifiers.override_params)
+    clear_overrides = get(kwargs, :override_params_clear, false)
+    del_names_any   = get(kwargs, :override_params_delete, nothing)
+    upsert_vec      = get(kwargs, :override_params_upsert, TempoParameter[])::Vector{TempoParameter}
+
+    overrides = clear_overrides ? TempoParameter[] : copy(base_overrides)
+
+    if del_names_any !== nothing
+        del_list = del_names_any isa AbstractVector ? del_names_any : (del_names_any,)
+        del_syms = Symbol.(String.(del_list))
+        overrides = without_params(overrides, del_syms)
+    end
+
+    if !isempty(upsert_vec)
+        overrides = with_upserted_params(overrides, upsert_vec)
+    end
+
     time_start      = get(kwargs, :time_start, s.modifiers.time_start)
     time_finish     = get(kwargs, :time_finish, s.modifiers.time_finish)
 
@@ -469,43 +486,32 @@ function copy_with(s::BasicTempoSettings; kwargs...)
 
     # Analysis (prefer full struct if provided)
     analysis_kw = get(kwargs, :analysis, nothing)
-    analysis′ = if analysis_kw !== nothing
-        analysis_kw
-    else
-        wne = get(kwargs, :white_noise_enabled, s.analysis.enabled)
-        wns = _validate_wn_scope(get(kwargs, :white_noise_scope, s.analysis.scope))
-        WhiteNoiseAnalysisOptions(enabled = wne, scope = wns)
-    end
+    analysis    = analysis_kw === nothing ? WhiteNoiseAnalysisOptions(
+        enabled = get(kwargs, :white_noise_enabled, s.analysis.enabled),
+        scope   = _validate_wn_scope(get(kwargs, :white_noise_scope, s.analysis.scope)),
+    ) : analysis_kw
 
     # Process (prefer full struct if provided)
     process_kw = get(kwargs, :process, nothing)
-    process′ = if process_kw !== nothing
-        process_kw
-    else
-        ProcessOptions(
-            timeout_s = get(kwargs, :timeout_s, s.process.timeout_s),
-            cleanup_before_run = get(kwargs, :cleanup_before_run, s.process.cleanup_before_run),
-            temp_dir = get(kwargs, :temp_dir, s.process.temp_dir),
-        )
-    end
+    process    = process_kw === nothing ? ProcessOptions(
+        timeout_s           = get(kwargs, :timeout_s, s.process.timeout_s),
+        cleanup_before_run  = get(kwargs, :cleanup_before_run, s.process.cleanup_before_run),
+        temp_dir            = get(kwargs, :temp_dir, s.process.temp_dir),
+    ) : process_kw
 
     # Logging (prefer full struct if provided)
     logging_kw = get(kwargs, :logging, nothing)
-    logging′ = if logging_kw !== nothing
-        logging_kw
-    else
-        LoggingOptions(
-            verbosity = Int(get(kwargs, :verbosity, s.logging.verbosity)),
-            with_timestamps = get(kwargs, :with_timestamps, s.logging.with_timestamps),
-        )
-    end
+    logging    = logging_kw === nothing ? LoggingOptions(
+        verbosity       = Int(get(kwargs, :verbosity, s.logging.verbosity)),
+        with_timestamps = get(kwargs, :with_timestamps, s.logging.with_timestamps),
+    ) : logging_kw
 
     files     = TempoRunFiles(work_dir, par_file_input, par_file_output, tim_file)
     options   = TempoExecutionOptions(tempo_version, flags, nits, gain)
-    modifiers = TempoRunModifiers(override_params, time_start, time_finish)
+    modifiers = TempoRunModifiers(overrides, time_start, time_finish)
     behavior  = TempoRunBehavior(write_output, write_residuals, save_internal_iterations, save_residuals)
 
-    return BasicTempoSettings(files, options, modifiers, behavior, analysis′, process′, logging′)
+    return BasicTempoSettings(files, options, modifiers, behavior, analysis, process, logging)
 end
 
 # --------------------------------------------------------------------------------------------------------------

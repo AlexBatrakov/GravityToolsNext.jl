@@ -33,6 +33,16 @@ struct ClenshawCurtisNodes <: AbstractNodeRule
     end
 end
 
+function Base.show(io::IO, ::MIME"text/plain", r::ClenshawCurtisNodes)
+    indent = get(io, :indent, 0)
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "ClenshawCurtisNodes")
+    println(io, spad, "n:   ", r.n)
+    println(io, spad, "eps: ", r.eps)
+end
+
 """
     eval_nodes(prior, rule::ClenshawCurtisNodes) -> θ::Vector{Float64}
 
@@ -76,6 +86,20 @@ struct QuantileNodes <: AbstractNodeRule
     end
 end
 
+
+# pretty text/plain printer that respects nesting/indentation
+function Base.show(io::IO, ::MIME"text/plain", r::QuantileNodes)
+    indent = get(io, :indent, 0)
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "QuantileNodes")
+    println(io, spad, "n: ", length(r.q))
+    println(IOContext(io, :compact => true, :limit => true), spad, "q: ", r.q)
+end
+
+
+
 """
     eval_nodes(prior, rule::QuantileNodes) -> θ::Vector{Float64}
 
@@ -98,6 +122,20 @@ struct ExplicitThetaNodes <: AbstractNodeRule
         isempty(theta) && error("ExplicitThetaNodes: theta is empty")
         new(collect(float.(theta)))
     end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", r::ExplicitThetaNodes)
+    if get(io, :compact, false)
+        return Base.summary(io, r)
+    end
+    indent = get(io, :indent, 0)
+    pad    = repeat(" ", indent)
+    spad   = repeat(" ", indent + 2)
+
+    println(io, pad,  "ExplicitThetaNodes")
+    println(io, spad, "n: ", length(r.theta))
+    println(IOContext(io, :compact => true, :limit => true), spad, "theta: ", r.theta)
+
 end
 
 """

@@ -14,7 +14,7 @@ LocalMinimaUnit(name; min = -Inf, max = Inf, from_min = true) = LocalMinimaUnit(
 
 function Base.show(io::IO, ru::LocalMinimaUnit)
     indent = get(io, :indent, 0)
-    pad = repeat(" ", indent)
+    pad    = repeat(" ", indent)
     spad   = repeat(" ", indent + 2)
 
     println(io, pad,  "Local mimima unit:")

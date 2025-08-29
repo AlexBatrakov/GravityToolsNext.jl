@@ -1,9 +1,6 @@
 # TempoParameters.jl
 # Utilities for representing and parsing TEMPO/TEMPO2 .par parameters.
 
-using Printf
-using Statistics
-
 # Keep higher precision for BigFloat arithmetic/printing (consistent with your previous code)
 setprecision(BigFloat, 80)
 
@@ -12,7 +9,7 @@ setprecision(BigFloat, 80)
 # ------------------------------------------------------------------------------
 
 """
-    GeneralTempoParameter
+    TempoParameter
 
 Parameter from a TEMPO/TEMPO2 `.par` file.
 
@@ -23,7 +20,7 @@ Fields
 - `flag::Union{Int64, Nothing}`           — fit flag (typically -1, 0, 1), optional
 - `uncertainty::Union{BigFloat, Nothing}` — 1σ uncertainty, optional
 """
-mutable struct GeneralTempoParameter
+mutable struct TempoParameter
     name::String
     name_symbol::Symbol
     value::Union{Int64, BigFloat, String, Nothing}
@@ -31,44 +28,56 @@ mutable struct GeneralTempoParameter
     uncertainty::Union{BigFloat, Nothing}
 end
 
-const TP = GeneralTempoParameter
+const TP = TempoParameter
+
+const _ALLOWED_FLAGS = (-1, 0, 1)
+
+validate_flag(flag::Union{Nothing,Int}) =
+    (flag === nothing || flag in _ALLOWED_FLAGS) ||
+    throw(ArgumentError("flag must be -1, 0, or 1; got $flag"))
 
 """
 Convenient constructor. Accepts `AbstractString` for name (e.g. `SubString`), stores as `String`.
 Promotes any `Real` value/uncertainty to `BigFloat`.
 """
-function GeneralTempoParameter(
+function TempoParameter(
     name::AbstractString,
-    value::Union{Int64, Real, BigFloat, String, Nothing}=nothing;
+    value::Union{Real,String,Nothing}=nothing;
     flag::Union{Int64, Nothing}=nothing,
-    uncertainty::Union{Real, BigFloat, Nothing}=nothing
+    uncertainty::Union{Real,Nothing}=nothing,
 )
-    promoted = value isa Integer      ? Int(value) :
-               value isa AbstractFloat ? BigFloat(value) :
-               value
-    return GeneralTempoParameter(
-        String(name),
-        Symbol(String(name)),
-        promoted,
-        flag,
-        uncertainty === nothing ? nothing : BigFloat(uncertainty)
-    )
+    s = String(name)
+    v2 = value === nothing ? nothing :
+         value isa Integer ? Int(value) :
+         value isa String  ? value :
+         BigFloat(value)
+    validate_flag(flag)
+    u2 = uncertainty === nothing ? nothing : BigFloat(uncertainty)
+    return TempoParameter(s, Symbol(s), v2, flag, u2)
 end
 
 # Keep `name`/`name_symbol` in sync; promote numerics for `value`/`uncertainty`.
-function Base.setproperty!(p::GeneralTempoParameter, f::Symbol, v)
+function Base.setproperty!(p::TempoParameter, f::Symbol, v)
     if f === :name
-        setfield!(p, :name, String(v))
-        setfield!(p, :name_symbol, Symbol(p.name))
+        s = String(v)
+        setfield!(p, :name, s)
+        setfield!(p, :name_symbol, Symbol(s))
         return v
     elseif f === :name_symbol
-        setfield!(p, :name_symbol, Symbol(v))
-        setfield!(p, :name, String(p.name_symbol))
+        sym = Symbol(v)
+        setfield!(p, :name_symbol, sym)
+        setfield!(p, :name, String(sym))
         return v
     elseif f === :value
-        v2 = v isa Integer ? Int(v) :
-             v isa AbstractFloat ? BigFloat(v) : v
+        v2 = v === nothing ? nothing :
+             v isa Integer ? Int(v) :
+             v isa String  ? v :
+             BigFloat(v)
         setfield!(p, :value, v2)
+        return v
+    elseif f === :flag
+        validate_flag(v)
+        setfield!(p, :flag, v === nothing ? nothing : Int(v))
         return v
     elseif f === :uncertainty
         setfield!(p, :uncertainty, v === nothing ? nothing : BigFloat(v))
@@ -78,7 +87,9 @@ function Base.setproperty!(p::GeneralTempoParameter, f::Symbol, v)
     end
 end
 
-function Base.show(io::IO, param::GeneralTempoParameter)
+Base.summary(io, param::TempoParameter) = print(io, param.name)
+
+function Base.show(io::IO, param::TempoParameter)
     indent = get(io, :indent, 0)
     pad = repeat(" ", indent)
     print(io, pad, param.name)
@@ -115,6 +126,19 @@ function Base.show(io::IO, param::GeneralTempoParameter)
 end
 
 # ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+value_as_float(p::TempoParameter)::Union{Nothing,Float64} =
+    p.value === nothing      ? nothing :
+    p.value isa Int64        ? Float64(p.value) :
+    p.value isa BigFloat     ? Float64(p.value) :
+    nothing
+
+uncertainty_as_float(p::TempoParameter)::Union{Nothing,Float64} =
+    p.uncertainty === nothing ? nothing : Float64(p.uncertainty)
+
+# ------------------------------------------------------------------------------
 # Parsing
 # ------------------------------------------------------------------------------
 
@@ -130,7 +154,7 @@ function parse_tempo_parameter_field(value_str::AbstractString)
 end
 
 """
-    extract_tempo_parameter_from_line(line) -> GeneralTempoParameter
+    extract_tempo_parameter_from_line(line) -> TempoParameter
 
 Parse one `.par` line using a simple grammar:
 
@@ -169,10 +193,14 @@ function extract_tempo_parameter_from_line(line::AbstractString)
 
     if rest == 1
         t2 = parsed[n_name + 2]
-        if t2 isa BigFloat
+        if t2 isa Int64
+            if t2 in _ALLOWED_FLAGS
+                flag = t2
+            else
+                unc = t2
+            end
+        elseif t2 isa BigFloat
             unc = t2
-        elseif t2 isa Int64
-            flag = t2
         end
     elseif rest >= 2
         t2 = parsed[n_name + 2]
@@ -187,7 +215,7 @@ function extract_tempo_parameter_from_line(line::AbstractString)
         # extra tokens (if any) are ignored deliberately
     end
 
-    return GeneralTempoParameter(name, value; flag=flag, uncertainty=unc)
+    return TempoParameter(name, value; flag=flag, uncertainty=unc)
 end
 
 # ------------------------------------------------------------------------------
@@ -208,9 +236,9 @@ align_str(s::String, w::Int) = _pad(s, w)
     get_par_file_representation(param) -> String
 
 Return a fixed-width `.par` line: name, value, optional flag, optional uncertainty.
-No precision is lost: `BigFloat` values are formatted directly as BigFloat.
+Format numerics with up to 21 significant digits; increase if needed.
 """
-function get_par_file_representation(param::GeneralTempoParameter)
+function get_par_file_representation(param::TempoParameter)
     # Negative numbers take one extra column; mirror your old alignment trick
     n_name  = (param.value isa BigFloat && param.value < 0) ? 22 : PAR_NAME_W
     n_value = (param.value isa BigFloat && param.value < 0) ? 33 : PAR_VALUE_W
@@ -250,55 +278,130 @@ function get_par_file_representation(param::GeneralTempoParameter)
     return line
 end
 
-# ------------------------------------------------------------------------------
-# Updates
-# ------------------------------------------------------------------------------
+# ---------------------------
+# Utils for Vector{TempoParameter}
+# ---------------------------
+
+# Accept either Symbol or String for lookups
+_to_sym(name::Union{Symbol,AbstractString}) = name isa Symbol ? name : Symbol(String(name))
 
 """
-    update_or_add_tempo_parameter!(params, param) -> Vector{GeneralTempoParameter}
+    param_index(params, name) -> Union{Int,Nothing}
 
-Update by name or append if not present. Keeps order. Modifies `params` in place.
+Find index of parameter by name (compared with `p.name_symbol`). Returns `nothing` if missing.
 """
-function update_or_add_tempo_parameter!(params::Vector{GeneralTempoParameter}, param::GeneralTempoParameter)
+function param_index(params::AbstractVector{TempoParameter}, name::Union{Symbol,AbstractString})
+    s = _to_sym(name)
     @inbounds for i in eachindex(params)
-        if params[i].name == param.name
-            params[i] = param
-            return params
+        if params[i].name_symbol === s
+            return i
         end
     end
-    push!(params, param)
+    return nothing
+end
+
+"""
+    has_param(params, name) -> Bool
+"""
+has_param(params::AbstractVector{TempoParameter}, name::Union{Symbol,AbstractString}) =
+    param_index(params, name) !== nothing
+
+"""
+    get_param(params, name; default=nothing) -> Union{TempoParameter,Nothing}
+
+Return a parameter by name or `default` if missing.
+"""
+function get_param(params::AbstractVector{TempoParameter}, name::Union{Symbol,AbstractString}; default=nothing)
+    i = param_index(params, name)
+    return i === nothing ? default : params[i]
+end
+
+# ---------------------------
+# Upsert (mutating / non-mutating)
+# ---------------------------
+
+"""
+    upsert_param!(params, p) -> Vector{TempoParameter}
+
+Update by name or append if not present. Keeps order. Mutates `params`.
+"""
+function upsert_param!(params::Vector{T}, p::T)::Vector{T} where {T<:TempoParameter}
+    i = param_index(params, p.name_symbol)
+    if i === nothing
+        push!(params, p)
+    else
+        params[i] = p
+    end
     return params
 end
 
 """
-    update_many_tempo_parameters!(params, new_params) -> Vector{GeneralTempoParameter}
+    upsert_params!(params, new_params) -> Vector{TempoParameter}
 
-Apply `update_or_add_tempo_parameter!` for each element of `new_params`.
+Apply `upsert_param!` for each element of `new_params`. Order of new elements is preserved.
 """
-function update_many_tempo_parameters!(params::Vector{GeneralTempoParameter}, new_params::Vector{GeneralTempoParameter})
+function upsert_params!(params::Vector{T}, new_params::AbstractVector{T})::Vector{T} where {T<:TempoParameter}
     @inbounds for p in new_params
-        update_or_add_tempo_parameter!(params, p)
+        upsert_param!(params, p)
     end
     return params
 end
 
 """
-    update_params_by_dict!(params, dict::Dict{Symbol,GeneralTempoParameter}) -> Vector{GeneralTempoParameter}
+    with_upserted_params(params, new_params) -> Vector{TempoParameter}
 
-Batch update by `name_symbol`. Preserves original order; missing keys are appended.
+Non-mutating version of `upsert_params!`.
 """
-function update_params_by_dict!(params::Vector{GeneralTempoParameter}, dict::Dict{Symbol,GeneralTempoParameter})
-    idx = Dict{Symbol,Int}()
-    @inbounds for (i, p) in pairs(params)
-        idx[p.name_symbol] = i
+function with_upserted_params(params::AbstractVector{T}, new_params::AbstractVector{T})::Vector{T} where {T<:TempoParameter}
+    out = collect(params)
+    upsert_params!(out, new_params)
+    return out
+end
+
+upsert!(params::Vector{TempoParameter}, name, value; flag=nothing, uncertainty=nothing) =
+    upsert_param!(params, TP(String(name), value; flag=flag, uncertainty=uncertainty))
+
+# ---------------------------
+# Delete by name (mutating / non-mutating)
+# ---------------------------
+
+"""
+    delete_param!(params, name) -> Bool
+
+Delete parameter by name if present. Returns `true` if deleted.
+"""
+function delete_param!(params::Vector{TempoParameter}, name::Union{Symbol,AbstractString})::Bool
+    i = param_index(params, name)
+    i === nothing && return false
+    deleteat!(params, i)
+    return true
+end
+
+
+"""
+    delete_params!(params, names) -> Int
+
+Delete all parameters whose names are in `names`. Returns count deleted.
+Preserves relative order of remaining items.
+"""
+function delete_params!(params::Vector{TempoParameter}, names)::Int
+    want = Set(_to_sym.(collect(names)))
+    before = length(params)
+    filter!(p -> !(p.name_symbol in want), params)
+    return before - length(params)
+end
+
+"""
+    without_params(params, names) -> Vector{TempoParameter}
+
+Non-mutating bulk deletion.
+"""
+function without_params(params::AbstractVector{T}, names)::Vector{T} where {T<:TempoParameter}
+    want = Set(_to_sym.(collect(names)))
+    out = Vector{T}()
+    sizehint!(out, length(params))
+    @inbounds for p in params
+        p.name_symbol in want || push!(out, p)
     end
-    for (k, p) in dict
-        if haskey(idx, k)
-            params[idx[k]] = p
-        else
-            push!(params, p)
-            idx[k] = length(params)
-        end
-    end
-    return params
+    return out
 end

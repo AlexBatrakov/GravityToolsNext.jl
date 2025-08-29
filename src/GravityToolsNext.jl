@@ -2,6 +2,7 @@ module GravityToolsNext
 
 # --- Базовые пакеты ---
 using Printf
+using Unicode
 using DelimitedFiles
 using StructArrays
 using Statistics
@@ -12,6 +13,8 @@ using HypothesisTests
 using LinearAlgebra
 using Roots
 using Optim
+using Dierckx
+using QuadGK
 # using Random
 
 # using Distributed
@@ -19,6 +22,8 @@ using Optim
 # using ProgressMeter
 # using QuadGK
 
+# Utils
+include("Utils/PrettyPrinting.jl")
 
 # TempoFramework/TempoCore
 include("TempoFramework/TempoCore/AbstractTempo.jl")
@@ -26,11 +31,10 @@ include("TempoFramework/TempoCore/TempoParameters.jl")
 include("TempoFramework/TempoCore/TempoParFile.jl")
 include("TempoFramework/TempoCore/TempoDataFiles.jl")
 include("TempoFramework/TempoCore/TempoOutput.jl")
-include("TempoFramework/TempoCore/TempoResult.jl")
+include("TempoFramework/TempoCore/Result/Result.jl")
 include("TempoFramework/TempoCore/TempoTasks.jl")
 include("TempoFramework/TempoCore/TempoSettings.jl")
 include("TempoFramework/TempoCore/TempoRun.jl")
-include("TempoFramework/TempoCore/TempoWhiteNoise.jl")
 
 # TempoFramework/Prior
 include("TempoFramework/Prior/PriorSpecs.jl")

@@ -223,11 +223,11 @@ struct PriorMarginalizationSettings{P<:AbstractPriorSpec, N<:AbstractNodeRule}
     exec_options::PriorExecutionOptions
     metrics_hook::Union{Nothing,Function}
 
-    function PriorMarginalizationSettings(
+    function PriorMarginalizationSettings(;
         parameter::Symbol,
         pin_mode::Symbol,
         prior::P,
-        nodes::N;
+        nodes::N,
         likelihood_source::Symbol = :chi2_fit,
         ref_strategy::Symbol      = :prior_median,  # also supports :grid_argmin | :spline_argmin | :custom_value
         ref_value::Union{Nothing,Real} = nothing,
