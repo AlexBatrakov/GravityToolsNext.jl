@@ -39,6 +39,13 @@ Optional domain hint used for plotting/clamping; override when available.
 """
 prior_support(pr::AbstractPriorSpec) = (NaN, NaN)
 
+"""
+    prior_cdf(pr, x::Real) -> Float64
+
+Prior cumulative distribution function at x. Optional but recommended for diagnostics/plots.
+"""
+prior_cdf(pr::AbstractPriorSpec, x::Real) = _notimpl(pr, prior_cdf)
+
 # Vectorized conveniences (built on the scalar methods)
 prior_invcdf(pr::AbstractPriorSpec, us::AbstractArray{<:Real}) =
     prior_invcdf.(Ref(pr), us)
@@ -48,6 +55,19 @@ prior_pdf(pr::AbstractPriorSpec, xs::AbstractArray{<:Real}) =
 
 prior_logpdf(pr::AbstractPriorSpec, xs::AbstractArray{<:Real}) =
     prior_logpdf.(Ref(pr), xs)
+
+prior_cdf(pr::AbstractPriorSpec, xs::AbstractArray{<:Real}) =
+    prior_cdf.(Ref(pr), xs)
+
+"""
+    prior_tail_mass(pr, lo, hi) -> Float64
+Return prior mass outside [lo, hi]: CDF(lo) + (1 - CDF(hi)).
+"""
+prior_tail_mass(pr::AbstractPriorSpec, lo::Real, hi::Real) = begin
+    clo = prior_cdf(pr, lo)
+    chi = prior_cdf(pr, hi)
+    return max(clo, 0.0) + max(1.0 - chi, 0.0)
+end
 
 # Niceties
 prior_median(pr::AbstractPriorSpec) = prior_invcdf(pr, 0.5)
@@ -77,6 +97,7 @@ prior_invcdf(pr::AnalyticPrior, u::Real) =
 
 prior_pdf(   pr::AnalyticPrior, x::Real) = pdf(pr.dist, x)
 prior_logpdf(pr::AnalyticPrior, x::Real) = logpdf(pr.dist, x)
+prior_cdf(   pr::AnalyticPrior, x::Real) = cdf(pr.dist, x)
 
 prior_support(pr::AnalyticPrior) = begin
     lo = try minimum(pr.dist) catch; -Inf end
@@ -219,6 +240,22 @@ end
 prior_logpdf(pr::GridPrior, x::Real) =
     (x < pr.x[1] || x > pr.x[end]) ? -Inf : log(prior_pdf(pr, x))
 
+"""
+    prior_cdf(pr::GridPrior, x::Real) -> Float64
+
+Evaluate the tabulated CDF with linear interpolation.
+Returns `cdf[1]` if `x < x[1]` and `cdf[end]` if `x > x[end]`.
+"""
+function prior_cdf(pr::GridPrior, x::Real)
+    if x < pr.x[1]
+        return pr.cdf[1]
+    elseif x > pr.x[end]
+        return pr.cdf[end]
+    else
+        return _lininterp(pr.x, pr.cdf, x)
+    end
+end
+
 prior_support(pr::GridPrior) = (pr.x[1], pr.x[end])
 
 # ---------- convenience constructor: GridPrior(x, pdf) ----------
@@ -354,6 +391,7 @@ end
 prior_invcdf(pr::SampledPrior, u::Real)    = prior_invcdf(materialize(pr), u)
 prior_pdf(   pr::SampledPrior, x::Real)    = prior_pdf(materialize(pr), x)
 prior_logpdf(pr::SampledPrior, x::Real)    = prior_logpdf(materialize(pr), x)
+prior_cdf(   pr::SampledPrior, x::Real)    = prior_cdf(materialize(pr), x)
 prior_support(pr::SampledPrior)            = prior_support(materialize(pr))
 
 

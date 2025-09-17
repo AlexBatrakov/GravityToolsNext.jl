@@ -10,20 +10,26 @@ using StatsBase
 using Distributions
 using KernelDensity
 using HypothesisTests
-using LinearAlgebra
 using Roots
 using Optim
 using Dierckx
 using QuadGK
-# using Random
+using Dates
+using Random
+using JLD2
 
-# using Distributed
+using Distributed
 # using PyPlot
-# using ProgressMeter
+using ProgressMeter
 # using QuadGK
 
 # Utils
 include("Utils/PrettyPrinting.jl")
+
+# AdaptiveGridFramework
+include("AdaptiveGridFramework/GridAxes.jl")
+include("AdaptiveGridFramework/RefinementSettings.jl")
+include("AdaptiveGridFramework/AdaptiveRefinement2DGrid.jl")
 
 # TempoFramework/TempoCore
 include("TempoFramework/TempoCore/AbstractTempo.jl")
@@ -45,6 +51,9 @@ include("TempoFramework/Prior/PriorSettings.jl")
 include("TempoFramework/SingleTasks/BasicTempoTask.jl")
 include("TempoFramework/SingleTasks/IterativeTempoTask.jl")
 include("TempoFramework/SingleTasks/PriorMarginalizedTempoTask.jl")
+
+# TempoFramework/MultiPointTasks
+include("TempoFramework/MultiPointTasks/Adaptive2DGridTask.jl")
 
 include("Exports.jl")
 

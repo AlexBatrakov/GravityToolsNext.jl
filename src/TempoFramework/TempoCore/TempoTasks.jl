@@ -80,6 +80,16 @@ function task_stage_inputs!(::SingleTempoTask, ::AbstractString)
     return nothing
 end
 
+
+# -----------------------------------------------------------------------------
+# Optional: derive par output filename for a node
+# -----------------------------------------------------------------------------
+
+# Generic fallback: require tasks to implement if different from default
+function task_derive_par_output(t::SingleTempoTask, node_tag::AbstractString)
+    error("task_derive_par_output not implemented for $(typeof(t)) — provide a method for your task type")
+end
+
 # -----------------------------------------------------------------------------
 # Multi-point tasks (if/when needed)
 # -----------------------------------------------------------------------------
@@ -92,3 +102,5 @@ Entry point for multi-point workflows. Define as needed for your project.
 function run_task(task::MultiPointTask)
     error("run_task not implemented for $(typeof(task))")
 end
+
+

@@ -11,11 +11,12 @@ _choices_str(allowed) = join((":" .* string.(allowed)), " | ")
     return val
 end
 
-const _MODES          = (:independent, :chained)
-const _SCHEDULERS     = (:serial, :distributed)
-const _ON_ERROR       = (:stop, :skip, :collect)
-const _WORKDIR_LAYOUT = (:per_node,)
-const _DIRNAME_MODE   = (:index_only, :with_value)
+const _MODES            = (:independent, :chained)
+const _SCHEDULERS       = (:serial, :distributed)
+const _ON_ERROR         = (:stop, :skip, :collect)
+const _WORKDIR_LAYOUT   = (:per_node,)
+const _DIRNAME_MODE     = (:index_only, :with_value)
+const _CHAIN_DIRECTIONS = (:forward, :backward)
 
 """
     PriorExecutionOptions
@@ -23,25 +24,29 @@ const _DIRNAME_MODE   = (:index_only, :with_value)
 Execution policy for running prior-marginalization nodes.
 
 Fields
-- `mode`            : chaining between nodes (`:independent` | `:chained`)
-- `scheduler`       : how to schedule nodes (`:serial` | `:distributed`)
-- `max_workers`     : cap for distributed workers (ignored for `:serial`; `0` means "all available")
-- `workdir_layout`  : directory layout policy (currently only `:per_node`)
-- `node_dir_prefix` : subdirectory prefix under the base task's work dir (e.g. `"prior_nodes/node_"`)
-- `keep_node_dirs`  : keep (true) or delete (false) per-node directories after run
-- `on_error`        : error handling (`:stop` | `:skip` | `:collect`)
+- `mode`              : node chaining policy (`:independent` | `:chained`)
+- `chain_direction`   : traversal order when chaining (`:forward` | `:backward`)
+- `chain_snapshot_par`: force snapshot of per-node input par when chaining (true/false)
+- `scheduler`         : how to schedule nodes (`:serial` | `:distributed`)
+- `max_workers`       : cap for distributed workers (ignored for `:serial`; `0` means "all available")
+- `workdir_layout`    : directory layout policy (currently only `:per_node`)
+- `node_dir_prefix`   : subdirectory prefix under the base task's work dir (e.g. `"nodes/node_"`)
+- `keep_node_dirs`    : keep (true) or delete (false) per-node directories after run
+- `on_error`          : error handling (`:stop` | `:skip` | `:collect`)
 
 Directory naming:
-- `dir_name_mode`   : directory name style (`:index_only` | `:with_value`)
-- `index_pad`       : zero-padding width for node index
-- `value_sig`       : significant digits used when embedding the parameter value into the name
+- `dir_name_mode`     : directory name style (`:index_only` | `:with_value`)
+- `index_pad`         : zero-padding width for node index
+- `value_sig`         : significant digits used when embedding the parameter value into the name
 """
 struct PriorExecutionOptions
     mode::Symbol             # :independent | :chained
+    chain_direction::Symbol  # :forward | :backward
+    chain_snapshot_par::Bool # force snapshot per-node input when chaining
     scheduler::Symbol        # :serial | :distributed
     max_workers::Int
     workdir_layout::Symbol   # currently only :per_node
-    node_dir_prefix::String  # e.g. "prior_nodes/node_"
+    node_dir_prefix::String  # e.g. "nodes/node_"
     keep_node_dirs::Bool
     on_error::Symbol         # :stop | :skip | :collect
 
@@ -50,26 +55,29 @@ struct PriorExecutionOptions
     value_sig::Int           # significant digits for value in name
 
     function PriorExecutionOptions(;
-        mode::Symbol           = :independent,
-        scheduler::Symbol      = :serial,
-        max_workers::Int       = 0,
-        workdir_layout::Symbol = :per_node,
-        node_dir_prefix::String = "prior_nodes/node_",
-        keep_node_dirs::Bool   = true,
-        on_error::Symbol       = :collect,
-        dir_name_mode::Symbol  = :index_only,   # or :with_value
-        index_pad::Int         = 3,
-        value_sig::Int         = 6,
+        mode::Symbol             = :independent,
+        chain_direction::Symbol  = :forward,
+        chain_snapshot_par::Bool = false,
+        scheduler::Symbol        = :serial,
+        max_workers::Int         = 0,
+        workdir_layout::Symbol   = :per_node,
+        node_dir_prefix::String  = "nodes/node_",
+        keep_node_dirs::Bool     = true,
+        on_error::Symbol         = :collect,
+        dir_name_mode::Symbol    = :index_only,   # or :with_value
+        index_pad::Int           = 3,
+        value_sig::Int           = 6,
     )
-        validate_choice("mode",           mode,           _MODES)
-        validate_choice("scheduler",      scheduler,      _SCHEDULERS)
-        validate_choice("workdir_layout", workdir_layout, _WORKDIR_LAYOUT)
-        validate_choice("on_error",       on_error,       _ON_ERROR)
-        validate_choice("dir_name_mode",  dir_name_mode,  _DIRNAME_MODE)
+        validate_choice("mode",             mode,             _MODES)
+        validate_choice("chain_direction",  chain_direction,  _CHAIN_DIRECTIONS)
+        validate_choice("scheduler",        scheduler,        _SCHEDULERS)
+        validate_choice("workdir_layout",   workdir_layout,   _WORKDIR_LAYOUT)
+        validate_choice("on_error",         on_error,         _ON_ERROR)
+        validate_choice("dir_name_mode",    dir_name_mode,    _DIRNAME_MODE)
         index_pad >= 0 || error("index_pad must be ≥ 0")
         value_sig >= 1 || error("value_sig must be ≥ 1")
         !isempty(node_dir_prefix) || error("node_dir_prefix must not be empty")
-        new(mode, scheduler, max_workers, workdir_layout, node_dir_prefix,
+        new(mode, chain_direction, chain_snapshot_par, scheduler, max_workers, workdir_layout, node_dir_prefix,
             keep_node_dirs, on_error, dir_name_mode, index_pad, value_sig)
     end
 end
@@ -78,16 +86,18 @@ function Base.show(io::IO, ::MIME"text/plain", e::PriorExecutionOptions)
     indent = get(io, :indent, 0)
     pad, spad = repeat(" ", indent), repeat(" ", indent + 2)
     println(io, pad, "PriorExecutionOptions")
-    println(io, spad, "mode:            ", e.mode)
-    println(io, spad, "scheduler:       ", e.scheduler)
-    println(io, spad, "max_workers:     ", e.max_workers)
-    println(io, spad, "workdir_layout:  ", e.workdir_layout)
-    println(io, spad, "node_dir_prefix: ", e.node_dir_prefix)
-    println(io, spad, "keep_node_dirs:  ", e.keep_node_dirs)
-    println(io, spad, "on_error:        ", e.on_error)
-    println(io, spad, "dir_name_mode:   ", e.dir_name_mode)
-    println(io, spad, "index_pad:       ", e.index_pad)
-    println(io, spad, "value_sig:       ", e.value_sig)
+    println(io, spad, "mode:              ", e.mode)
+    println(io, spad, "chain_direction:   ", e.chain_direction)
+    println(io, spad, "chain_snapshot_par:", e.chain_snapshot_par)
+    println(io, spad, "scheduler:         ", e.scheduler)
+    println(io, spad, "max_workers:       ", e.max_workers)
+    println(io, spad, "workdir_layout:    ", e.workdir_layout)
+    println(io, spad, "node_dir_prefix:   ", e.node_dir_prefix)
+    println(io, spad, "keep_node_dirs:    ", e.keep_node_dirs)
+    println(io, spad, "on_error:          ", e.on_error)
+    println(io, spad, "dir_name_mode:     ", e.dir_name_mode)
+    println(io, spad, "index_pad:         ", e.index_pad)
+    println(io, spad, "value_sig:         ", e.value_sig)
 end
 
 # --------------------------------------------------------------------------------------------------------------

@@ -127,6 +127,18 @@ function read_par_file!(par_file::TempoParFile)
 end
 
 """
+    read_par_file(path::AbstractString) -> TempoParFile
+
+Reads a .par file from the given path and returns a TempoParFile.
+"""
+function read_par_file(path::AbstractString)::TempoParFile
+    dir  = dirname(path)
+    name = basename(path)
+    pf   = TempoParFile(name, dir)
+    return read_par_file!(pf)
+end
+
+"""
     write_par_file!(par_file::TempoParFile) -> TempoParFile
 
 Writes parameters to `par_file.path`, preserving the order defined in `order`.
@@ -291,6 +303,22 @@ Return parameters in the stored order; skips names that may have been removed fr
 params_as_vector(pf::TempoParFile)::Vector{TempoParameter} =
     [pf.params[sym] for sym in pf.order if haskey(pf.params, sym)]
 
+# --- Small helpers for numeric access / overrides ----------------------------
+_get_val(pf::TempoParFile, name::Union{Symbol,AbstractString}) = begin
+    sym = _to_sym(name)
+    haskey(pf.params, sym) ? pf.params[sym].value : nothing
+end
+
+function _find_override_value(overrides::AbstractVector{TempoParameter}, names::Tuple{Vararg{Symbol}})
+    for p in overrides
+        ns = p.name_symbol
+        if any(ns === nm for nm in names)
+            return p.value
+        end
+    end
+    return nothing
+end
+
 # ------------------------------------------------------------
 # Updates
 # ------------------------------------------------------------
@@ -318,9 +346,63 @@ _overrides_name_set(overrides::AbstractVector{TempoParameter}) =
     Set(uppercase.(String.(getfield.(overrides, :name_symbol))))
 
 """
+    _apply_coupling_f1_to_ddot!(pf, overrides) -> TempoParFile
+
+If `DDOT` (or `F2`) is present in `overrides` and `F1` is **not** overridden, adjust `F1`
+according to the heuristic ΔF1 = - F0 * (DDOT_new - DDOT_base) / D, using values from `pf`:
+- `F0`, `F1` read from the current `pf` (pre-override state),
+- `DDOT_base` from `pf[:DDOT]` if present, otherwise `pf[:F2]`, else 0,
+- `D` from `pf[:D]` if present, else 1.
+The new `F1` is upserted into `pf`.
+"""
+function _apply_coupling_f1_to_ddot!(pf::TempoParFile, overrides::AbstractVector{TempoParameter})
+    # check presence in overrides
+    has_F1_over = any(p -> p.name_symbol === :F1, overrides)
+    has_DDOT_over = any(p -> (p.name_symbol === :DDOT) || (p.name_symbol === :F2), overrides)
+    has_DDOT_over || return pf
+    has_F1_over   && return pf
+
+    # base values from pf
+    F0_base = _get_val(pf, :F0)
+    F1_base = _get_val(pf, :F1)
+    DDOT_b  = something(_get_val(pf, :DDOT), _get_val(pf, :F2))
+    D_base  = something(_get_val(pf, :D), 1.0)
+
+    (F0_base === nothing || F1_base === nothing) && return pf
+    DDOT_b === nothing && (DDOT_b = 0.0)
+
+    # new DDOT from overrides
+    DDOT_new = _find_override_value(overrides, (:DDOT, :F2))
+    DDOT_new === nothing && return pf
+
+    # compute with BigFloat for stability, then cast back to typeof(F1_base)
+    F0b = BigFloat(F0_base)
+    F1b = BigFloat(F1_base)
+    Db  = BigFloat(D_base)
+    DDb = BigFloat(DDOT_b)
+    DDn = BigFloat(DDOT_new)
+
+    ΔF1 = - (DDn - DDb) * F0b / Db
+    F1n_big = F1b + ΔF1
+
+    # cast to the same type as original F1 if possible
+    T = typeof(F1_base)
+    F1n = try
+        convert(T, F1n_big)
+    catch
+        Float64(F1n_big)
+    end
+
+    update_one_parameter_in_par_file!(pf, TP("F1", F1n, flag = pf.params[:F1].flag, uncertainty = pf.params[:F1].uncertainty))
+    return pf
+end
+
+"""
     update_par_file!(pf::TempoParFile; ...; prefer_overrides=true) -> TempoParFile
 
 Apply overrides and optionally set NITS/GAIN/START/FINISH with a clear precedence rule.
+
+- `couple_f1_to_ddot::Bool=false` — if true and DDOT is overridden (while F1 is not), auto-adjust F1 using ΔF1 ≈ -F0·ΔDDOT/D.
 """
 function update_par_file!(
     pf::TempoParFile;
@@ -330,7 +412,13 @@ function update_par_file!(
     time_start::Union{Float64,Nothing}=nothing,
     time_finish::Union{Float64,Nothing}=nothing,
     prefer_overrides::Bool=true,
+    couple_f1_to_ddot::Bool=false,
 )
+    # Optionally pre-adjust F1 based on DDOT override before applying the rest
+    if couple_f1_to_ddot
+        _apply_coupling_f1_to_ddot!(pf, override_params)
+    end
+
     # 1) Apply explicit overrides first (flag-only and full upserts)
     for p in override_params
         update_one_parameter_in_par_file!(pf, p)

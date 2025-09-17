@@ -1,13 +1,13 @@
 # TempoFramework/SingleTasks/BasicTempoTask.jl
 
 """
-    BasicTempoTask(settings::BasicTempoSettings)
+    BasicTempoTask(settings::TempoRunSettings)
 
 Single TEMPO/TEMPO2 task with parsed iterations, optional residual statistics,
 and optional white-noise analysis controlled by `settings.analysis`.
 """
 struct BasicTempoTask <: SingleTempoTask
-    settings::BasicTempoSettings
+    settings::TempoRunSettings
 end
 
 function Base.show(io::IO, ::MIME"text/plain", task::BasicTempoTask)
@@ -23,50 +23,53 @@ end
 
 # --- helpers ----------------------------------------------------------------------------------------------------
 
-# Resolve `.tim` path against work_dir if the path is relative
-_resolve_tim_path(s::BasicTempoSettings) =
-    isabspath(s.files.tim_file) ? s.files.tim_file : joinpath(s.files.work_dir, s.files.tim_file)
+"""
+    _load_tim_file(tim_path::AbstractString) :: Union{Vector{TimTOAEntry},Nothing}
 
-_resolve_par_input_path(s::BasicTempoSettings) =
-    isabspath(s.files.par_file_input) ? s.files.par_file_input :
-                                        joinpath(s.files.work_dir, s.files.par_file_input)
-
-# Pick residual file path for iteration `i`; prefer per-iteration files if present.
-# Falls back to `residuals.dat` only for the final iteration.
-function _pick_residual_path(s::BasicTempoSettings, i::Int, niter::Int)
-    if s.behavior.write_residuals
-        cand = joinpath(s.files.work_dir, "residuals_$(i).dat")
-        if isfile(cand)
-            return cand
+Attempt to read a TEMPO/TEMPO2 `.tim` file. Returns the parsed
+`Vector{TimTOAEntry}` on success, or `nothing` if the file is missing or fails
+to parse (a warning is logged in that case).
+"""
+function _load_tim_file(tim_path::AbstractString)::Union{Vector{TimTOAEntry},Nothing}
+    if isfile(tim_path)
+        try
+            return read_tim_file(tim_path)
+        catch err
+            @warn "Failed to read TIM file" path=tim_path error=err
         end
-    end
-    # fallback: final residuals only for the last iteration
-    cand_final = joinpath(s.files.work_dir, "residuals.dat")
-    if isfile(cand_final) && i == niter
-        return cand_final
     end
     return nothing
 end
 
-# Try to read the final out-par into a TempoParFile (optional)
-function _load_final_par_file(s::BasicTempoSettings)
-    out_name = basename(s.files.par_file_output)
-    out_path = joinpath(s.files.work_dir, out_name)
-    if isfile(out_path)
-        pf = TempoParFile(out_name, s.files.work_dir)
+"""
+    _load_final_par_file(par_out_path::AbstractString) :: Union{TempoParFile,Nothing}
+
+Attempt to read the final output `.par` file produced by TEMPO/TEMPO2.
+Returns a `TempoParFile` on success or `nothing` when the file is absent or
+cannot be parsed.
+"""
+function _load_final_par_file(par_out_path::AbstractString)::Union{TempoParFile,Nothing}
+    if isfile(par_out_path)
         try
-            read_par_file!(pf)
+            pf = read_par_file(par_out_path)
             return pf
         catch err
-            @warn "Failed to read final par file" path=out_path error=err
+            @warn "Failed to read final par file" path=par_out_path error=err
         end
     end
     return nothing
 end
 
-# Build a boolean mask selecting iterations for white-noise analysis
-#   scope = :all   -> all iterations
-#   scope = :final -> final iteration only
+"""
+    _wn_mask(niter::Int, scope::Symbol) :: BitVector
+
+Construct a boolean mask that selects which iterations will undergo
+white-noise analysis:
+  * `:all`   — all iterations are selected
+  * `:final` — only the last iteration is selected
+
+Unknown scopes are treated defensively as `:final`.
+"""
 function _wn_mask(niter::Int, scope::Symbol)
     if scope === :all
         return trues(niter)
@@ -90,69 +93,95 @@ residual/TIM-derived statistics, optionally perform white-noise fitting, and
 return an aggregated `GeneralTempoResult`.
 """
 function run_task(task::BasicTempoTask)::GeneralTempoResult
-    s = task.settings
+    settings = task.settings
 
-    # 1) Run TEMPO and parse iteration-wise outputs
-    parsed_iter_outputs = run_tempo_parsed(s)  # Vector{InternalIterationOutput}
+    # 1) Run TEMPO and parse iteration-wise outputs (low-level)
+    run_out = run_tempo_parsed(settings)             # ::TempoRunOutput
+    artifacts = run_out.artifacts
+    parsed_iter_outputs = run_out.parsed
     niter = length(parsed_iter_outputs)
-    niter == 0 && error("run_tempo_parsed returned no iterations")
 
     # 2) Read TIM entries
-    tim_path = _resolve_tim_path(s)
-    tim_entries = TimTOAEntry[]
-    try
-        tim_entries = read_tim_file(tim_path)
-    catch err
-        @warn "Failed to read TIM file; statistics will be limited" path=tim_path error=err
-    end
+    tim_entries = _load_tim_file(artifacts.tim_path)
+    tim_count = tim_entries === nothing ? missing : length(tim_entries)
 
     # 3) Decide which iterations get white-noise analysis
-    wn_enabled = s.analysis.enabled
-    wn_mask_vec = wn_enabled ? _wn_mask(niter, s.analysis.scope) : falses(niter)
+    wn_enabled = settings.analysis.enabled
+    wn_mask_vec = wn_enabled ? _wn_mask(niter, settings.analysis.scope) : falses(niter)
 
     # 4) Build InternalIterationResult per iteration
-    results = InternalIterationResult[]
-    sizehint!(results, niter)
+    iter_results = InternalIterationResult[]
+    sizehint!(iter_results, niter)
 
     for (i, out) in enumerate(parsed_iter_outputs)
-        residual_path = _pick_residual_path(s, i, niter)
+        residual_path = artifacts.residual_paths[i]
 
         iter_res = build_internal_iteration_result(
             out, residual_path, tim_entries;
-            time_start          = s.modifiers.time_start,
-            time_finish         = s.modifiers.time_finish,
-            save_residuals      = s.behavior.save_residuals,
+            time_start          = settings.modifiers.time_start,
+            time_finish         = settings.modifiers.time_finish,
+            save_residuals      = settings.retention.save_residuals,
             analyze_white_noise = wn_mask_vec[i]
         )
-        push!(results, iter_res)
+        push!(iter_results, iter_res)
     end
 
     # 5) Optionally load the final par-file written by TEMPO
-    par_file_final = _load_final_par_file(s)
+    par_file_final = _load_final_par_file(artifacts.par_out_path)
 
     # 6) Assemble the top-level result (convergence/params are computed inside)
-    meta = Dict{Symbol,Any}(
-        :work_dir       => s.files.work_dir,
-        :tim_path       => tim_path,
-        :par_out        => basename(s.files.par_file_output),
-        :tempo_ver      => typeof(s.options.tempo_version),
-        :flags          => s.options.flags,
-        :nits           => s.options.nits,
-        :gain           => s.options.gain,
-        :time_start     => s.modifiers.time_start,
-        :time_finish    => s.modifiers.time_finish,
+    metadata = Dict{Symbol,Any}(
+        :work_dir       => settings.paths.work_dir,
+        :job_root       => artifacts.job_root,
+        :run_cwd        => artifacts.run_cwd,
+        :input_dir      => artifacts.input_dir,
+        :output_dir     => artifacts.output_dir,
+        :tim_path       => artifacts.tim_path,
+        :par_out_path   => artifacts.par_out_path,
+        :out_path       => artifacts.out_path,
+        :tempo_ver      => typeof(settings.engine.tempo_version),
         :wn_enabled     => wn_enabled,
-        :wn_scope       => s.analysis.scope,
-        :save_residuals => s.behavior.save_residuals,
+        :wn_scope       => settings.analysis.scope,
+        :save_residuals => settings.retention.save_residuals,
+        :flags          => settings.engine.flags,
+        :nits           => settings.engine.nits,
+        :gain           => settings.engine.gain,
+        :time_start     => settings.modifiers.time_start,
+        :time_finish    => settings.modifiers.time_finish,
+        :io_mirror      => settings.workspace.io_mirror,
+        # helpful run statistics
+        :n_iter         => niter,
+        :tim_entries_n  => tim_count,
+        :run_success    => run_out.success,
+        :run_status     => run_out.status,
+        :exit_code      => run_out.exit_code,
+        :started_at     => run_out.started_at,
+        :finished_at    => run_out.finished_at,
+        :duration_s     => run_out.duration_s,
+        :stderr_tail    => run_out.stderr_tail,
     )
 
-    return GeneralTempoResult(results; par_file_final=par_file_final, metadata=meta)
+    result = GeneralTempoResult(iter_results; par_file_final, metadata)
+
+    # Post-run hygiene: remove tmp/CWD per keep_tmp_on_* policies (safe after reading artifacts)
+    cleanup_run!(run_out, settings)
+
+    return result
 end
 
-# ——— interface hook: where this task runs
-task_workdir(task::BasicTempoTask)::AbstractString = task.settings.files.work_dir
+"""
+    task_workdir(task::BasicTempoTask) :: AbstractString
 
-# ——— interface hook: clone task with overrides and a new work_dir
+Return the working directory where this `BasicTempoTask` will execute.
+"""
+task_workdir(task::BasicTempoTask)::AbstractString = task.settings.paths.work_dir
+
+"""
+    task_with_overrides(task::BasicTempoTask, overrides; work_dir) :: BasicTempoTask
+
+Clone the task with a new `work_dir` and a list of `TempoParameter` overrides
+that will be upserted into the underlying `TempoRunSettings`.
+"""
 function task_with_overrides(task::BasicTempoTask,
                              overrides::AbstractVector{TempoParameter};
                              work_dir::AbstractString)::BasicTempoTask
@@ -164,25 +193,43 @@ function task_with_overrides(task::BasicTempoTask,
     return BasicTempoTask(s2)
 end
 
+# """
+#     task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString) -> Nothing
+
+# Copy the input `.par` and `.tim` files into `node_dir` so the task can run
+# with name-only file references.
+# """
+# function task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString)
+#     s = task.settings
+#     mkpath(node_dir)
+
+#     # par input
+#     src_par = _resolve_par_input_path(s)
+#     dst_par = joinpath(node_dir, basename(s.paths.par_input))
+#     cp(src_par, dst_par; force=true)
+
+#     # tim file
+#     src_tim = _resolve_tim_path(s)
+#     dst_tim = joinpath(node_dir, basename(s.paths.tim_input))
+#     cp(src_tim, dst_tim; force=true)
+
+#     return nothing
+# end
+
 """
     task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString) -> Nothing
 
-Copy the input `.par` and `.tim` files into `node_dir` so the task can run
-with name-only file references.
+`BasicTempoTask` does not require explicit input staging because `run_tempo_parsed`
+operates directly within the resolved workspace directories. This is a no-op
+hook to satisfy the `SingleTempoTask` interface.
 """
 function task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString)
-    s = task.settings
-    mkpath(node_dir)
-
-    # par input
-    src_par = _resolve_par_input_path(s)
-    dst_par = joinpath(node_dir, basename(s.files.par_file_input))
-    cp(src_par, dst_par; force=true)
-
-    # tim file
-    src_tim = _resolve_tim_path(s)
-    dst_tim = joinpath(node_dir, basename(s.files.tim_file))
-    cp(src_tim, dst_tim; force=true)
-
     return nothing
+end
+
+
+function task_copy_with(task::BasicTempoTask; kwargs...)
+    s = task.settings
+    s2 = copy_with(s; kwargs...)
+    return BasicTempoTask(s2)
 end

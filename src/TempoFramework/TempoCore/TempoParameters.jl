@@ -324,13 +324,27 @@ end
     upsert_param!(params, p) -> Vector{TempoParameter}
 
 Update by name or append if not present. Keeps order. Mutates `params`.
+
+Rules:
+- If parameter with this name is new → push `p`.
+- If exists → replace value/flag intelligently:
+    * If `p.value === nothing`, keep the old value.
+    * If `p.flag === nothing`, keep the old flag.
+    * Otherwise take the provided values.
 """
 function upsert_param!(params::Vector{T}, p::T)::Vector{T} where {T<:TempoParameter}
     i = param_index(params, p.name_symbol)
     if i === nothing
         push!(params, p)
     else
-        params[i] = p
+        old = params[i]
+        params[i] = TempoParameter(
+            p.name,
+            p.name_symbol,
+            p.value === nothing ? old.value : p.value,
+            p.flag  === nothing ? old.flag  : p.flag,
+            p.uncertainty === nothing ? old.uncertainty : p.uncertainty
+        )
     end
     return params
 end
