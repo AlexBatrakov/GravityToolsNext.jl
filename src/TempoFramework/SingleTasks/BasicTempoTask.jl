@@ -193,43 +193,42 @@ function task_with_overrides(task::BasicTempoTask,
     return BasicTempoTask(s2)
 end
 
-# """
-#     task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString) -> Nothing
-
-# Copy the input `.par` and `.tim` files into `node_dir` so the task can run
-# with name-only file references.
-# """
-# function task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString)
-#     s = task.settings
-#     mkpath(node_dir)
-
-#     # par input
-#     src_par = _resolve_par_input_path(s)
-#     dst_par = joinpath(node_dir, basename(s.paths.par_input))
-#     cp(src_par, dst_par; force=true)
-
-#     # tim file
-#     src_tim = _resolve_tim_path(s)
-#     dst_tim = joinpath(node_dir, basename(s.paths.tim_input))
-#     cp(src_tim, dst_tim; force=true)
-
-#     return nothing
-# end
-
-"""
-    task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString) -> Nothing
-
-`BasicTempoTask` does not require explicit input staging because `run_tempo_parsed`
-operates directly within the resolved workspace directories. This is a no-op
-hook to satisfy the `SingleTempoTask` interface.
-"""
-function task_stage_inputs!(task::BasicTempoTask, node_dir::AbstractString)
-    return nothing
-end
-
 
 function task_copy_with(task::BasicTempoTask; kwargs...)
     s = task.settings
     s2 = copy_with(s; kwargs...)
     return BasicTempoTask(s2)
+end
+
+function task_stage_inputs!(task::BasicTempoTask, dest_dir::AbstractString)
+    # Copy par/tim files into `dest_dir` if present. Accepts relative (to work_dir) or absolute paths.
+    s = task.settings
+    mkpath(dest_dir)
+    for rel_path in (s.paths.par_input, s.paths.tim_input)
+        rel_path === nothing && continue
+        src_path = isabspath(rel_path) ? rel_path : joinpath(s.paths.work_dir, rel_path)
+        if isfile(src_path)
+            dest_path = joinpath(dest_dir, basename(rel_path))
+            if abspath(src_path) != abspath(dest_path)
+                cp(src_path, dest_path; force=true)
+            end
+        else
+            @warn "Input file to stage not found" path=src_path
+        end
+    end
+    return nothing
+end
+
+#
+# BasicTempoTask-specific derivation:
+# Take the stem of base `par_output`, drop one trailing `_out` if present,
+# then append `_" * node_tag * "_out.par"`.
+function task_derive_par_output(t::BasicTempoTask, node_tag::AbstractString)
+    base = basename(t.settings.paths.par_output)
+    stem, _ = splitext(base)
+    # drop one _out suffix if present
+    if endswith(stem, "_out")
+        stem = first(stem, lastindex(stem) - 4)
+    end
+    return string(stem, "_", String(node_tag), "_out.par")
 end

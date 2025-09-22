@@ -15,20 +15,24 @@
 #   helpers (task_copy_with, task_derive_par_output) and GeneralTempoResult API.
 # ----------------------------------------------------------------------------
 
+
 # -- Options ------------------------------------------------------------------
 
 Base.@kwdef struct GridWorkspaceOptions
-    tag_mode::Symbol = :with_value           # :index_only | :with_value
-    value_sig::Int = 6                       # significant digits for values in tags
-    point_job_prefix::String = "grid_points/"       # job_name prefix per point
-    point_overwrite::Symbol = :reuse         # :error | :reuse | :unique | :clean
-    point_layout::Symbol = :split            # :flat | :split (inside each job dir)
-    io_mirror::Union{Symbol,Int,Tuple{Symbol,Int}} = :none
-    snapshot_par::Bool = true
-    link_tim::Bool = false
-    keep_tmp_on_success::Bool = false
-    save_result_jld2::Bool = false
-    results_dir::String = "results"
+    grid_root::String                          # absolute OR relative to base task work_dir
+    point_job_prefix::String = "grid_points"   # <grid_root>/<point_job_prefix>/<TAG>/ becomes job_name
+    results_dirname::String   = "results"      # <grid_root>/<results_dirname>/<TAG>.jld2
+    input_dirname::String     = "input"        # optional staging of base inputs once per grid
+
+    tag_mode::Symbol = :with_value             # :with_value | :hash
+    tag_value_sig::Int = 6                     # significant digits for values in tags
+    tag_sep::String = "__"                     # separator between X and Y parts (for :with_value)
+    sanitize::Bool = true                      # filesystem-safe tag strings
+    hash_len::Int = 10                         # significant hex chars in hash (for :hash)
+
+    save_results_jld2::Bool = true             # save full GeneralTempoResult per point
+    stage_inputs::Bool = true                  # stage base inputs into <grid_root>/<input_dirname>
+    stage_inputs_mode::Symbol = :root          # :root | :subdir  (where to place staged inputs)
 end
 
 # -- Task ---------------------------------------------------------------------
@@ -53,57 +57,54 @@ end
 
 # -- Helpers ------------------------------------------------------------------
 
-# compact numeric to string for tags
+# compact numeric to string for tags (unchanged)
 _format_val(x::Real; sig::Int=6) = format_short(x; sig=sig)
 
 # Build a stable, filesystem-safe tag for a point
 function _point_tag(axX::GridAxis, axY::GridAxis, xv::Real, yv::Real, opts::GridWorkspaceOptions)
-    if opts.tag_mode === :index_only
-        ix = findfirst(==(xv), axis_values(axX))::Union{Int,Nothing}
-        iy = findfirst(==(yv), axis_values(axY))::Union{Int,Nothing}
-        # Fallback if exact match is not present (explicit grid may not be identity)
-        ix === nothing && (ix = 1)
-        iy === nothing && (iy = 1)
-        return string(Symbol(axX.name), lpad(ix, 3, '0'), "_",
-                      Symbol(axY.name), lpad(iy, 3, '0'))
-    elseif opts.tag_mode === :with_value
-        xs = sanitize_name(_format_val(xv; sig=opts.value_sig))
-        ys = sanitize_name(_format_val(yv; sig=opts.value_sig))
-        return string(Symbol(axX.name), "=", xs, "_", Symbol(axY.name), "=", ys)
+    if opts.tag_mode === :with_value
+        xs = _format_val(xv; sig=opts.tag_value_sig)
+        ys = _format_val(yv; sig=opts.tag_value_sig)
+        tag = string(axX.name, "=", xs, opts.tag_sep, axY.name, "=", ys)
+        return opts.sanitize ? sanitize_name(tag) : tag
+    elseif opts.tag_mode === :hash
+        # Stable textual encoding for floats (17 significant digits)
+        xs = @sprintf("%.17g", Float64(xv))
+        ys = @sprintf("%.17g", Float64(yv))
+        h  = bytes2hex(sha1(String(codeunits(string(axX.name, "|", xs, "|", axY.name, "|", ys)))))[1:opts.hash_len]
+        tag = string(axX.name, "_", axY.name, "_h", h)
+        return opts.sanitize ? sanitize_name(tag) : tag
     else
-        error("GridWorkspaceOptions.tag_mode must be :index_only or :with_value")
+        error("GridWorkspaceOptions.tag_mode must be :with_value or :hash")
     end
 end
 
+# Helper functions for paths
+_grid_results_dir(root::AbstractString, o::GridWorkspaceOptions) = joinpath(root, o.results_dirname)
+_grid_point_job_name(o::GridWorkspaceOptions, tag::AbstractString) = joinpath(o.point_job_prefix, tag)
+_grid_point_result_path(root::AbstractString, o::GridWorkspaceOptions, tag::AbstractString) = joinpath(_grid_results_dir(root, o), string(tag, ".jld2"))
+
 # Derive per-point workspace fields from base task (job-per-point)
-function _derive_point_workspace(base_task::SingleTempoTask, tag::AbstractString, opts::GridWorkspaceOptions)
-    job_name = string(opts.point_job_prefix, tag)
+function _derive_point_workspace(base_task::SingleTempoTask, tag::AbstractString, root_dir::AbstractString, opts::GridWorkspaceOptions)
+    job_name = _grid_point_job_name(opts, tag)
     par_out  = task_derive_par_output(base_task, tag)
-    return (; work_mode = :jobdir, job_name, par_output = par_out, layout = opts.point_layout)
+    return (; work_dir = root_dir, job_name, par_output = par_out)
 end
 
 # Extract a NamedTuple of requested keys from GeneralTempoResult
 function _extract_namedtuple(res::GeneralTempoResult, keys::Tuple{Vararg{Symbol}})
     vals = Vector{Float64}(undef, length(keys))
-    for (i, k) in enumerate(keys)
+    @inbounds for (i, k) in enumerate(keys)
         v = NaN
-        # 1) metrics/extras
-        if hasproperty(res, :metrics) && res.metrics !== nothing && haskey(res.metrics, k)
+        if !isnothing(res.metrics) && haskey(res.metrics, k)
             v = try
                 Float64(res.metrics[k])
             catch
                 NaN
             end
-        elseif hasproperty(res, :extras) && res.extras !== nothing && haskey(res.extras, k)
+        elseif !isnothing(res.param_estimates) && haskey(res.param_estimates, k)
             v = try
-                Float64(res.extras[k])
-            catch
-                NaN
-            end
-        # 2) fitted parameter estimates
-        elseif hasproperty(res, :param_estimates) && res.param_estimates !== nothing && haskey(res.param_estimates, k)
-            v = try
-                Float64(res.param_estimates[k].value)
+                Float64(res.param_estimates[k][1])  # take value from (value, sigma)
             catch
                 NaN
             end
@@ -114,52 +115,49 @@ function _extract_namedtuple(res::GeneralTempoResult, keys::Tuple{Vararg{Symbol}
 end
 
 # Save full point result if requested
-function _maybe_save_result(res::GeneralTempoResult, tag::AbstractString, opts::GridWorkspaceOptions)
-    opts.save_result_jld2 || save_result_jld2(res; filename=string(tag, ".jld2"))
+function _maybe_save_result(res::GeneralTempoResult, tag::AbstractString, root_dir::AbstractString, opts::GridWorkspaceOptions)
+    opts.save_results_jld2 || return
+    mkpath(_grid_results_dir(root_dir, opts))
+    save_result_jld2(res; filename = _grid_point_result_path(root_dir, opts, tag))
 end
 
 # -- Execution ----------------------------------------------------------------
 
 function run_task(task::Adaptive2DGridTask)
+    base_root = task_workdir(task.base_task)
+    grid_root_abs = isabspath(task.opts.grid_root) ? task.opts.grid_root : joinpath(base_root, task.opts.grid_root)
+    mkpath(grid_root_abs)
+    if task.opts.stage_inputs
+        dest_dir = task.opts.stage_inputs_mode === :root ? grid_root_abs : joinpath(grid_root_abs, task.opts.input_dirname)
+        mkpath(dest_dir)
+        task_stage_inputs!(task.base_task, dest_dir)
+    end
+
     # 0) Build initial grid holder
     grid_init = AdaptiveRefinement2DGrid(task.x, task.y, task.ref_settings)
+    keys_tuple = Tuple(task.ref_settings.params_to_save)
 
     # 1) Construct per-point target function for the grid engine
     function target_function(xv, yv; task::Adaptive2DGridTask=task)
-        # Format per-point overrides
-        overrides = [
-            TP(String(task.x.name), xv),
-            TP(String(task.y.name), yv),
-        ]
-
-        # Build tag, job_name and par_output (job-per-point isolation)
+        overrides = [TP(String(task.x.name), xv), TP(String(task.y.name), yv)]
         tag = _point_tag(task.x, task.y, xv, yv, task.opts)
-        ws  = _derive_point_workspace(task.base_task, tag, task.opts)
+        ws  = _derive_point_workspace(task.base_task, tag, grid_root_abs, task.opts)
 
-        # Clone base SingleTempoTask with point-specific workspace & overrides
         point_task = task_copy_with(task.base_task;
-            override_params_upsert = overrides,
-            work_mode  = ws.work_mode,
-            job_name   = ws.job_name,
             par_output = ws.par_output,
-            layout     = ws.layout,
-            io_mirror  = task.opts.io_mirror,
-            snapshot_par = task.opts.snapshot_par,
-            link_tim     = task.opts.link_tim,
-            keep_tmp_on_success = task.opts.keep_tmp_on_success,
-            overwrite = task.opts.point_overwrite,
+            override_params_upsert = overrides,
+            work_mode = :jobdir,
+            job_name  = ws.job_name,
+            overwrite = :clean,
+            work_dir  = ws.work_dir,
         )
 
-        # Execute and map to NamedTuple required by the grid engine
         println("Run started:  $(task.x.name) = $xv, $(task.y.name) = $yv")
         res = run_task(point_task)
+        println("Run finished: $(task.x.name) = $xv, $(task.y.name) = $yv; chi2_fit = $(get(res.metrics, :chi2_fit, NaN))")
 
-        println("Run finished: $(task.x.name) = $xv, $(task.y.name) = $yv; chisqr = $(res.metrics[:chi2_fit]), pre_post = $(res.metrics[:pre_post_final])")
-
-        # Save full result if requested
-        _maybe_save_result(res, tag, task.opts)
-
-        return _extract_namedtuple(res, task.ref_settings.params_to_save)
+        _maybe_save_result(res, tag, grid_root_abs, task.opts)
+        return _extract_namedtuple(res, keys_tuple)
     end
 
     # 2) params_function! hook (optional aggregation per refinement step)

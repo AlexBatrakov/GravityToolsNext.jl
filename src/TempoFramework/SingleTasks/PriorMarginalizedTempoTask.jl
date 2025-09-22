@@ -232,22 +232,6 @@ end
 # Derivers (par_output / temp_dir)
 # ---------------------------
 
-
-#
-# BasicTempoTask-specific derivation:
-# Take the stem of base `par_output`, drop one trailing `_out` if present,
-# then append `_" * node_tag * "_out.par"`.
-function task_derive_par_output(t::BasicTempoTask, node_tag::AbstractString)
-    base = basename(t.settings.paths.par_output)
-    stem, _ = splitext(base)
-    # drop one _out suffix if present
-    if endswith(stem, "_out")
-        stem = first(stem, lastindex(stem) - 4)
-    end
-    return string(stem, "_", String(node_tag), "_out.par")
-end
-
-
 """
     _make_node_task(base_task, s, i, θ) -> (node_task, node_tag, node_dir, par_out)
 

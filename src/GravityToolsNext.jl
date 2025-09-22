@@ -17,6 +17,7 @@ using QuadGK
 using Dates
 using Random
 using JLD2
+using SHA
 
 using Distributed
 # using PyPlot

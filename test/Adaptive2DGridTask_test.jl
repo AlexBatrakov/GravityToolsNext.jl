@@ -1,4 +1,5 @@
 using Distributed
+using GravityToolsNext
 
 addprocs(8)
 
@@ -6,13 +7,13 @@ addprocs(8)
 
 
 basic_settings = TempoRunSettings(
-    work_dir = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_GR/GRID_TEST",
+    work_dir = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_GR",
     par_input = "DDSTG_GR_SCINT_RN84_test.par",
     par_output = "DDSTG_GR_SCINT_RN84_test_out.par",
     tim_input = "J1141-6545_pn_new.tim",
     tempo_version = Tempo2(),
     flags = "",
-    nits = 1,
+    nits = 3,
     gain = 1,
     override_params = [TP("DM", 116)],
     # time_start = nothing,
@@ -31,7 +32,7 @@ basic_settings = TempoRunSettings(
     link_tim = false,                              # false
     snapshot_par = true,                           # true
     cleanup_before_run = true,                     # true
-    keep_tmp_on_success = false,                   # false
+    keep_tmp_on_success = true,                   # false
     keep_tmp_on_error = true,                      # true
     # timeout_s = nothing,
     write_manifest = false,                         # false
@@ -57,11 +58,7 @@ grid_task = Adaptive2DGridTask(
         LocalMinimaUnit(:chi2_fit, from_min=true, max=100.0)
     ),
     opts = GridWorkspaceOptions(
-        point_job_prefix = "grid_points/",
-        keep_tmp_on_success = true,
-        point_overwrite = :clean,
-        save_result_jld2 = true,
-        results_dir = "grid_results",
+        grid_root = "GRID_TEST"
     ),
 )
 

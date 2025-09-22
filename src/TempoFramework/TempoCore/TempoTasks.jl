@@ -68,9 +68,9 @@ end
 # -----------------------------------------------------------------------------
 
 """
-    task_stage_inputs!(task::SingleTempoTask, node_dir::AbstractString) -> Nothing
+    task_stage_inputs!(task::SingleTempoTask, dest_dir::AbstractString) -> Nothing
 
-Stage/copy any task-specific input artifacts into `node_dir` so that the task
+Stage/copy any task-specific input artifacts into `dest_dir` so that the task
 can run there using name-only paths. Default implementation does nothing.
 
 Wrappers like prior-marginalization should call this before cloning a task
