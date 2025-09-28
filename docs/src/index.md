@@ -1,29 +1,29 @@
 # GravityToolsNext.jl
 
-Короткая стартовая страница документации.
+Welcome to the documentation for GravityToolsNext.jl.
 
-Эта документация собирается с помощью **Documenter.jl**.
+This site is built with Documenter.jl.
 
 ---
 
-## Установка
+## Installation
 
 ```julia
-] add https://github.com/AlexBatrakov/GravityToolsNext.jl
+using Pkg
+Pkg.add(url = "https://github.com/AlexBatrakov/GravityToolsNext.jl")
 ```
 
 ---
 
-## Быстрый пример
+## Start here
 
-```julia
-using GravityToolsNext
-println("GravityToolsNext loaded ✔")
-```
+- Quickstart: a minimal run with TEMPO/TEMPO2
+- Settings: full list of configuration types and options
+- Runner: how materialization and job layouts work
+- Tasks: higher-level orchestration helpers
 
 ---
 
-## Примечания
+## API
 
-- Полная справка по API будет на отдельной странице `api.md`.
-- Если страница API ещё не настроена или временно отключена, эта стартовая страница всё равно успешно соберётся.
+See the API reference page for docstrings and symbols.
