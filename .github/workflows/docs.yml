@@ -2,11 +2,16 @@ name: Docs
 
 on:
   push:
-    tags:    [ "v*" ]        # соберёт stable при релиз-тегах    branches: [ "main" ]     # пом
+    branches: [ "main" ]        # поменяй, если у тебя другая главная ветка
+    tags:    [ "v*" ]           # соберёт stable при релиз-тегах
   pull_request:
 
 permissions:
-  contents: write            # нужно, чтобы пушить в gh-pages
+  contents: write                # нужно, чтобы пушить в gh-pages
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -26,4 +31,6 @@ jobs:
       - name: Build & deploy docs
         env:
           CI: "true"
-        run: julia --project=docs docs/make.jl          # DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}  # для           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # д
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # публичный репозиторий — этого достаточно
+          # DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}  # для приватных репозиториев
+        run: julia --project=docs docs/make.jl
