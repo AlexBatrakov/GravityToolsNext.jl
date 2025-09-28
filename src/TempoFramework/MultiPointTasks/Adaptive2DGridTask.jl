@@ -18,6 +18,29 @@
 
 # -- Options ------------------------------------------------------------------
 
+"""
+    GridWorkspaceOptions
+
+Workspace and tagging options for `Adaptive2DGridTask`.
+
+Fields
+- `grid_root::String`            : Root folder for all grid artifacts. If relative, it's resolved against the base task `work_dir`.
+- `point_job_prefix::String`     : Subdirectory under `grid_root` to hold per-point job folders (used as part of `job_name`).
+- `results_dirname::String`      : Subdirectory under `grid_root` where per-point results (e.g., JLD2 files) are saved.
+- `input_dirname::String`        : Optional subdirectory name used when staging base inputs for the grid.
+
+Tagging
+- `tag_mode::Symbol`             : `:with_value` to embed axis values into the tag, `:hash` to use a stable hash instead.
+- `tag_value_sig::Int`           : Significant digits when formatting values for `:with_value` tags.
+- `tag_sep::String`              : Separator between X and Y parts for `:with_value` tags.
+- `sanitize::Bool`               : Make tag filesystem-safe.
+- `hash_len::Int`                : Number of hex characters to keep when `tag_mode == :hash`.
+
+Persistence & staging
+- `save_results_jld2::Bool`      : Save full `GeneralTempoResult` for each point into `results_dirname`.
+- `stage_inputs::Bool`           : Stage base task inputs into the grid root once before running.
+- `stage_inputs_mode::Symbol`    : Where to stage inputs: `:root` (into `grid_root`) or `:subdir` (into `grid_root/input_dirname`).
+"""
 Base.@kwdef struct GridWorkspaceOptions
     grid_root::String                          # absolute OR relative to base task work_dir
     point_job_prefix::String = "grid_points"   # <grid_root>/<point_job_prefix>/<TAG>/ becomes job_name
@@ -37,6 +60,22 @@ end
 
 # -- Task ---------------------------------------------------------------------
 
+"""
+    Adaptive2DGridTask(; base_task, x, y, ref_settings, opts=GridWorkspaceOptions())
+
+Run a `SingleTempoTask` over an adaptively refined 2D grid defined by axes `x` and `y`.
+
+Arguments
+- `base_task::SingleTempoTask`             : The task to clone and execute at each grid point.
+- `x::GridAxis`, `y::GridAxis`             : Grid axes (linear/log/explicit rules supported).
+- `ref_settings::RefinementSettings`       : Refinement engine configuration (units and parameters to save).
+- `opts::GridWorkspaceOptions`             : Workspace layout, tagging, and persistence options.
+
+Behavior
+- Each grid point is run in its own job directory (under `opts.grid_root`) with a unique `job_name` and `par_output` stem.
+- The task is cloned via `task_copy_with` and parameter overrides `TP(string(x.name), xv)`, `TP(string(y.name), yv)`.
+- Selected result scalars are returned to the grid engine as a `NamedTuple` keyed by `ref_settings.params_to_save`.
+"""
 struct Adaptive2DGridTask{T1<:SingleTempoTask, RX<:AbstractGridRule, RY<:AbstractGridRule, RU<:Tuple{Vararg{AbstractRefinementUnit}}} <: MultiPointTask
     base_task::T1
     x::GridAxis{RX}

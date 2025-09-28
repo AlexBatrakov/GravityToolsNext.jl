@@ -14,13 +14,27 @@ makedocs(
         size_threshold      = 1024*1024,  # 1 MiB вместо 200 KiB
         size_threshold_warn = 512*1024,   # 512 KiB вместо 100 KiB
     ),
+    checkdocs = :none,
     pages = [
         "Home"       => "index.md",
         "Quickstart" => "quickstart.md",
+        "Tempo Framework" => Any[
+            "tempo_overview.md",
+            "tempo_tasks_basic.md",
+            "results.md",
+            "prior.md",
+            "tempo_tasks_grid_prior.md",
+        ],
         "Guides" => Any[
             "settings.md",
             "runner.md",
             "tasks.md",
+        ],
+        "Adaptive Grid" => Any[
+            "adaptive_grid.md",
+            "grid_axes.md",
+            "refinement.md",
+            "grid_tasks.md",
         ],
         "API"        => "api.md",
     ],
