@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+GravityToolsNext = "d96123b9-2412-4d4a-93b7-7aa5929371a7"
+
+[compat]
+Documenter = "1"

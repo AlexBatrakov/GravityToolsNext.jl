@@ -16,6 +16,26 @@
 #   - _group_by_backend(entries; in_fit::Union{Nothing,Bool}=nothing)
 #   - _empty_norm_stats()
 # -----------------------------------------------------------------------------
+# Overview
+# This module estimates white-noise calibration parameters (EFAC, EQUAD, constant
+# offset) per backend by minimizing the Anderson–Darling A² of normalized residuals,
+# and aggregates results into a global summary. The implementation is conservative
+# and robust by design:
+#   - Per-backend estimation runs independently under `try/catch`; failures are
+#     recorded and excluded from the global summary.
+#   - Working buffers are reused and many routines mutate their first argument
+#     to avoid allocations on hot paths.
+#
+# Units
+#   - Residual-related quantities **and** TOA uncertainties are expected in
+#     microseconds (µs). Normalized residuals are unitless.
+#   - EFAC is dimensionless; EQUAD has units of µs; offset is in µs.
+#
+# Error policy
+#   - The low-level solver `estimate_white_noise_ad_with_offset` may throw on
+#     severely degenerate inputs (e.g., zero variance, infeasible initialization).
+#     The top-level `build_white_noise_fit` guards against this and marks such
+#     backends as `success=false`.
 
 # =============================================================================
 # Grid defaults for initialization (tunable constants; no logic changes)
@@ -249,6 +269,12 @@ Jointly estimate (efac, equad, offset) by minimizing AD A² of normalized residu
   solves `efac` for each pair, fits `offset`, and seeds `Optim.optimize`.
 - Mutates working buffers internally for performance (documented below).
 - `converged` is the boolean flag returned by `Optim.converged(...)` for the outer 3D solve.
+Notes
+- Inputs are expected in µs for residuals and TOA uncertainties; the objective
+  uses unitless normalized residuals.
+- On severely degenerate inputs (e.g., zero variance or infeasible seeds), the
+  optimizer may throw; callers are expected to guard with `try/catch` (as done in
+  `build_white_noise_fit`) and mark the backend as failed.
 """
 function estimate_white_noise_ad_with_offset(
     residuals::Vector{Float64},
@@ -502,10 +528,12 @@ end
 
 """
     _normalized_shifted_residuals_for_backend(residuals, uncertainties_orig, efac, equad, offset)
-        -> Union{Vector{Float64}, Nothing}
+        -> Vector{Float64}
 
-Safely transform uncertainties and compute normalized residuals for a single backend.
-Returns `nothing` if no valid points remain after filtering.
+Transform uncertainties (σ' = sqrt((efac·σ)^2 + equad^2)) and compute shifted,
+normalized residuals `(residuals - offset) ./ σ'` for a single backend.
+Returns a vector aligned with the inputs (no filtering performed here).
+Inputs are assumed to be in microseconds (µs); the result is unitless.
 """
 function _normalized_shifted_residuals_for_backend(
     residuals::Vector{Float64},
@@ -530,6 +558,7 @@ end
 
 Per-backend estimation of (efac, equad, offset) on in-fit TOAs. Robust to empty groups and
 solver failures. Produces per-backend normalized residual stats and a global summary.
+Inputs are expected in microseconds (µs) for residuals and TOA uncertainties; normalized residuals are unitless.
 
 Behavior
 - If a backend fails (throws) or yields non-finite parameters, it is marked `success=false` and added

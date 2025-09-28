@@ -36,11 +36,13 @@ struct LocalMinimaUnit <: AbstractRefinementUnit
     name::Symbol
     min::Float64
     max::Float64
+    max_diff::Float64
     from_min::Bool
+    nan_default::Float64
 end
 
-LocalMinimaUnit(name; min = -Inf, max = Inf, from_min = true) =
-    LocalMinimaUnit(name, min, max, from_min)
+LocalMinimaUnit(name; min = -Inf, max = Inf, max_diff = 0.0, from_min = true, nan_default = Inf) =
+    LocalMinimaUnit(name, min, max, max_diff, from_min, nan_default)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::LocalMinimaUnit)
     indent = get(io, :indent, 0)
@@ -51,7 +53,9 @@ function Base.show(io::IO, ::MIME"text/plain", ru::LocalMinimaUnit)
     println(io, spad, "Name of variable: ", ru.name)
     println(io, spad, "Minimum value:    ", ru.min)
     println(io, spad, "Maximum value:    ", ru.max)
+    println(io, spad, "Maximal difference:", ru.max_diff)
     println(io, spad, "From min value:   ", ru.from_min)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 """
@@ -63,9 +67,10 @@ struct FullUnit <: AbstractRefinementUnit
     name::Symbol
     min::Float64
     max::Float64
+    nan_default::Float64
 end
 
-FullUnit(name; min = -Inf, max = Inf) = FullUnit(name, min, max)
+FullUnit(name; min = -Inf, max = Inf, nan_default = Inf) = FullUnit(name, min, max, nan_default)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::FullUnit)
     indent = get(io, :indent, 0)
@@ -76,6 +81,7 @@ function Base.show(io::IO, ::MIME"text/plain", ru::FullUnit)
     println(io, spad, "Name of variable: ", ru.name)
     println(io, spad, "Minimum value:    ", ru.min)
     println(io, spad, "Maximum value:    ", ru.max)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 """
@@ -90,10 +96,11 @@ struct DiffUnit <: AbstractRefinementUnit
     max::Float64
     diff::Float64
     from_min::Bool
+    nan_default::Float64
 end
 
-DiffUnit(name; min = -Inf, max = Inf, diff, from_min = true) =
-    DiffUnit(name, min, max, diff, from_min)
+DiffUnit(name; min = -Inf, max = Inf, diff, from_min = true, nan_default = Inf) =
+    DiffUnit(name, min, max, diff, from_min, nan_default)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::DiffUnit)
     indent = get(io, :indent, 0)
@@ -106,6 +113,7 @@ function Base.show(io::IO, ::MIME"text/plain", ru::DiffUnit)
     println(io, spad, "Maximum value:    ", ru.max)
     println(io, spad, "Maximal difference: ", ru.diff)
     println(io, spad, "From min value:   ", ru.from_min)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 """
@@ -119,10 +127,11 @@ struct RelDiffUnit <: AbstractRefinementUnit
     max::Float64
     rel_diff::Float64
     from_min::Bool
+    nan_default::Float64
 end
 
-RelDiffUnit(name; min = -Inf, max = Inf, rel_diff, from_min = true) =
-    RelDiffUnit(name, min, max, rel_diff, from_min)
+RelDiffUnit(name; min = -Inf, max = Inf, rel_diff, from_min = true, nan_default = Inf) =
+    RelDiffUnit(name, min, max, rel_diff, from_min, nan_default)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::RelDiffUnit)
     indent = get(io, :indent, 0)
@@ -135,6 +144,7 @@ function Base.show(io::IO, ::MIME"text/plain", ru::RelDiffUnit)
     println(io, spad, "Maximum value:    ", ru.max)
     println(io, spad, "Maximal relative difference: ", ru.rel_diff)
     println(io, spad, "From min value:   ", ru.from_min)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 """
@@ -149,19 +159,20 @@ struct ContourUnit <: AbstractRefinementUnit
     max::Float64
     contours::Vector{Float64}
     from_min::Bool
+    nan_default::Float64
 end
 
 # primary keyword constructor (vector of levels)
-ContourUnit(name::Symbol; min = -Inf, max = Inf, contours::AbstractVector{<:Real}, from_min::Bool = true) =
-    ContourUnit(name, min, max, Float64.(contours), from_min)
+ContourUnit(name::Symbol; min = -Inf, max = Inf, contours::AbstractVector{<:Real}, from_min::Bool = true, nan_default::Float64 = Inf) =
+    ContourUnit(name, min, max, Float64.(contours), from_min, nan_default)
 
 # positional conveniences that *do* dispatch:
-ContourUnit(name::Symbol, contours::AbstractVector{<:Real}; min = -Inf, max = Inf, from_min::Bool = true) =
-    ContourUnit(name, min, max, Float64.(contours), from_min)
-ContourUnit(name::Symbol, contour::Real; min = -Inf, max = Inf, from_min::Bool = true) =
-    ContourUnit(name, min, max, [Float64(contour)], from_min)
-ContourUnit(name::Symbol, contours::Tuple{Vararg{Real}}; min = -Inf, max = Inf, from_min::Bool = true) =
-    ContourUnit(name, min, max, Float64.(collect(contours)), from_min)
+# ContourUnit(name::Symbol, contours::AbstractVector{<:Real}; min = -Inf, max = Inf, from_min::Bool = true) =
+#     ContourUnit(name, min, max, Float64.(contours), from_min)
+# ContourUnit(name::Symbol, contour::Real; min = -Inf, max = Inf, from_min::Bool = true) =
+#     ContourUnit(name, min, max, [Float64(contour)], from_min)
+# ContourUnit(name::Symbol, contours::Tuple{Vararg{Real}}; min = -Inf, max = Inf, from_min::Bool = true) =
+#     ContourUnit(name, min, max, Float64.(collect(contours)), from_min)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::ContourUnit)
     indent = get(io, :indent, 0)
@@ -174,6 +185,7 @@ function Base.show(io::IO, ::MIME"text/plain", ru::ContourUnit)
     println(io, spad, "Maximum value:    ", ru.max)
     println(io, spad, "Contour levels:   ", ru.contours)
     println(io, spad, "From min value:   ", ru.from_min)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 """
@@ -190,38 +202,39 @@ struct DiffContourUnit <: AbstractRefinementUnit
     diffs::Vector{Float64}
     contours::Vector{Float64}
     from_min::Bool
+    nan_default::Float64
 end
 
 # primary keyword constructor (vectors)
 DiffContourUnit(name::Symbol; min = -Inf, max = Inf,
                 diffs::AbstractVector{<:Real}, contours::AbstractVector{<:Real},
-                from_min::Bool = true) =
-    DiffContourUnit(name, min, max, Float64.(diffs), Float64.(contours), from_min)
+                from_min::Bool = true, nan_default::Float64 = Inf) =
+    DiffContourUnit(name, min, max, Float64.(diffs), Float64.(contours), from_min, nan_default)
 
 # positional conveniences with dispatch
-DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contours::AbstractVector{<:Real};
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, Float64.(diffs), Float64.(contours), from_min)
+# DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contours::AbstractVector{<:Real};
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, Float64.(diffs), Float64.(contours), from_min)
 
-DiffContourUnit(name::Symbol, diff::Real, contours::AbstractVector{<:Real};
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, [Float64(diff)], Float64.(contours), from_min)
+# DiffContourUnit(name::Symbol, diff::Real, contours::AbstractVector{<:Real};
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, [Float64(diff)], Float64.(contours), from_min)
 
-DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contour::Real;
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, Float64.(diffs), [Float64(contour)], from_min)
+# DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contour::Real;
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, Float64.(diffs), [Float64(contour)], from_min)
 
-DiffContourUnit(name::Symbol, diffs::Tuple{Vararg{Real}}, contours::AbstractVector{<:Real};
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, Float64.(collect(diffs)), Float64.(contours), from_min)
+# DiffContourUnit(name::Symbol, diffs::Tuple{Vararg{Real}}, contours::AbstractVector{<:Real};
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, Float64.(collect(diffs)), Float64.(contours), from_min)
 
-DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contours::Tuple{Vararg{Real}};
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, Float64.(diffs), Float64.(collect(contours)), from_min)
+# DiffContourUnit(name::Symbol, diffs::AbstractVector{<:Real}, contours::Tuple{Vararg{Real}};
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, Float64.(diffs), Float64.(collect(contours)), from_min)
 
-DiffContourUnit(name::Symbol, diff::Real, contour::Real;
-                min = -Inf, max = Inf, from_min::Bool = true) =
-    DiffContourUnit(name, min, max, [Float64(diff)], [Float64(contour)], from_min)
+# DiffContourUnit(name::Symbol, diff::Real, contour::Real;
+#                 min = -Inf, max = Inf, from_min::Bool = true) =
+#     DiffContourUnit(name, min, max, [Float64(diff)], [Float64(contour)], from_min)
 
 function Base.show(io::IO, ::MIME"text/plain", ru::DiffContourUnit)
     indent = get(io, :indent, 0)
@@ -235,6 +248,7 @@ function Base.show(io::IO, ::MIME"text/plain", ru::DiffContourUnit)
     println(io, spad, "Maximal differences: ", ru.diffs)
     println(io, spad, "Contour levels:   ", ru.contours)
     println(io, spad, "From min value:   ", ru.from_min)
+    println(io, spad, "NaN default:      ", ru.nan_default)
 end
 
 # == Refinement Settings Container ============================================

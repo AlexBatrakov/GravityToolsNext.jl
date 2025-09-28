@@ -93,8 +93,9 @@ Selects cells containing a unique local minimum within a specified range.
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::LocalMinimaUnit; at_corner=false)
     cell     = @view grid.vars[ref_unit.name][i_cell : min(i_cell+1, grid.x.N) , j_cell : min(j_cell+1, grid.y.N)]
     big_cell = @view grid.vars[ref_unit.name][max(i_cell-1, 1) : min(i_cell+2, grid.x.N), max(j_cell-1, 1) : min(j_cell+2, grid.y.N)]
-    value_big_cell_min = minimum(big_cell)
-    value_cell_min = minimum(cell)
+    value_big_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, big_cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     value_min = grid.min[ref_unit.name]
 
     # Check that the minimum in big_cell is within the cell
@@ -106,6 +107,8 @@ function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DG
     # Optionally require the minimum to be at the cell corner
     at_corner_case = grid.vars[ref_unit.name][i_cell,j_cell] == value_big_cell_min
 
+    diff_case = (value_cell_max - value_cell_min) > ref_unit.max_diff
+
     if ref_unit.from_min
         min_case = ref_unit.min <= value_big_cell_min - value_min
         max_case = ref_unit.max >= value_big_cell_min - value_min
@@ -114,7 +117,7 @@ function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DG
         max_case = ref_unit.max >= value_big_cell_min
     end
 
-    return local_minima_case && unique_minimum_case && min_case && max_case && (!at_corner || at_corner_case)
+    return local_minima_case && unique_minimum_case && min_case && max_case && (!at_corner || at_corner_case) && diff_case
 end
 
 """
@@ -124,8 +127,8 @@ Selects cells where the min/max value is within specified bounds.
 """
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::FullUnit)
     cell = @view grid.vars[ref_unit.name][i_cell:i_cell+1,j_cell:j_cell+1]
-    value_cell_min = minimum(cell)
-    value_cell_max = maximum(cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     min_case = ref_unit.min <= value_cell_min
     max_case = ref_unit.max >= value_cell_max
     return min_case && max_case
@@ -138,8 +141,8 @@ Selects cells where the difference across the cell exceeds a threshold.
 """
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::DiffUnit)
     cell = @view grid.vars[ref_unit.name][i_cell:i_cell+1,j_cell:j_cell+1]
-    value_cell_min = minimum(cell)
-    value_cell_max = maximum(cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     value_min = grid.min[ref_unit.name]
     if ref_unit.from_min
         min_case = ref_unit.min <= value_cell_min - value_min
@@ -159,9 +162,9 @@ Selects cells where the relative difference across the cell exceeds a threshold.
 """
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::RelDiffUnit)
     cell = @view grid.vars[ref_unit.name][i_cell:i_cell+1,j_cell:j_cell+1]
-    value_cell_min = minimum(cell)
-    value_cell_max = maximum(cell)
-    value_cell_mean = mean(cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_mean = mean(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     value_min = grid.min[ref_unit.name]
     if ref_unit.from_min
         min_case = ref_unit.min <= value_cell_min - value_min
@@ -182,8 +185,8 @@ Selects cells where the cell crosses a specified contour value.
 """
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::ContourUnit)
     cell = @view grid.vars[ref_unit.name][i_cell:i_cell+1,j_cell:j_cell+1]
-    value_cell_min = minimum(cell)
-    value_cell_max = maximum(cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     value_min = grid.min[ref_unit.name]
     if ref_unit.from_min
         contour_case = any(value_cell_min .< value_min .+ ref_unit.contours .< value_cell_max)
@@ -204,8 +207,8 @@ Selects cells where the cell crosses a contour and the difference exceeds a thre
 """
 function cell_selector(i_cell::Int64, j_cell::Int64, grid::AdaptiveRefinement2DGrid, ref_unit::DiffContourUnit)
     cell = @view grid.vars[ref_unit.name][i_cell:i_cell+1,j_cell:j_cell+1]
-    value_cell_min = minimum(cell)
-    value_cell_max = maximum(cell)
+    value_cell_min = minimum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
+    value_cell_max = maximum(x -> isnan(x) ? ref_unit.nan_default : x, cell)
     min_case = ref_unit.min <= value_cell_min
     max_case = ref_unit.max >= value_cell_max
     value_min = grid.min[ref_unit.name]

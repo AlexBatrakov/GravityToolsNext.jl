@@ -7,6 +7,7 @@
 #   GeneralTempoResult (struct)
 #   GeneralTempoResult(iterations; ...) constructor
 #   GeneralTempoResult(iter; ...) convenience constructor
+#   (virtual props) res.final, res.last_successful, res.residual_stats, res.white_noise
 # uses:
 #   build_core_metrics, build_convergence_info
 
@@ -45,55 +46,57 @@ Additionally (only if `include_tim == true` and either the in-fit and in-tim set
 or `include_tim_even_if_same == true`):
 - :chi2_tim, :chi2r_tim, :wrms_tim, :wrms_tn_tim
 """
-function build_core_metrics(final_it::InternalIterationResult, conv::ConvergenceInfo;
+function build_core_metrics(final_iter::InternalIterationResult, conv::ConvergenceInfo;
                             include_tim::Bool=true,
                             include_tim_even_if_same::Bool=false)
-    m = Dict{Symbol,Float64}()
+    metrics = Dict{Symbol,Float64}()
 
     # Final TEMPO basic block
-    basic = final_it.output.basic
+    basic = final_iter.output.basic
+
+    metrics[:chi2_fit_basic]  = isfinite(basic.chisqr) ? basic.chisqr : NaN
 
     # Residual stats (may be missing)
-    if final_it.stats !== nothing
-        fit_all = final_it.stats.in_fit.all
-        m[:wrms_fit]     = fit_all.raw.wrms
-        m[:wrms_tn_fit]  = fit_all.tn.wrms
-        m[:chi2_fit]     = fit_all.norm_global.chisqr
-        m[:chi2r_fit]    = fit_all.norm_global.red_chisqr
+    if final_iter.stats !== nothing
+        fit_all = final_iter.stats.in_fit.all
+        metrics[:wrms_fit]     = fit_all.raw.wrms
+        metrics[:wrms_tn_fit]  = fit_all.tn.wrms
+        metrics[:chi2_fit]     = fit_all.norm_global.chisqr
+        metrics[:chi2r_fit]    = fit_all.norm_global.red_chisqr
 
         # Add _tim metrics only if requested and not a trivial alias (or forced)
-        add_tim = include_tim && (final_it.stats.in_fit !== final_it.stats.in_tim || include_tim_even_if_same)
+        add_tim = include_tim && (final_iter.stats.in_fit !== final_iter.stats.in_tim || include_tim_even_if_same)
         if add_tim
-            tim_all = final_it.stats.in_tim.all
-            m[:wrms_tim]     = tim_all.raw.wrms
-            m[:wrms_tn_tim]  = tim_all.tn.wrms
-            m[:chi2_tim]     = tim_all.norm_global.chisqr
-            m[:chi2r_tim]    = tim_all.norm_global.red_chisqr
+            tim_all = final_iter.stats.in_tim.all
+            metrics[:wrms_tim]     = tim_all.raw.wrms
+            metrics[:wrms_tn_tim]  = tim_all.tn.wrms
+            metrics[:chi2_tim]     = tim_all.norm_global.chisqr
+            metrics[:chi2r_tim]    = tim_all.norm_global.red_chisqr
         end
     else
         # No stats available
-        m[:wrms_fit]     = NaN
-        m[:wrms_tn_fit]  = NaN
-        m[:chi2_fit]     = NaN
-        m[:chi2r_fit]    = NaN
+        metrics[:wrms_fit]     = NaN
+        metrics[:wrms_tn_fit]  = NaN
+        metrics[:chi2_fit]     = NaN
+        metrics[:chi2r_fit]    = NaN
         # Note: _tim keys are omitted entirely when stats are missing
     end
 
     # Final pre/post from TEMPO (may be NaN)
-    m[:pre_post_final] = (basic === nothing || !isfinite(basic.pre_post)) ? NaN : basic.pre_post
+    metrics[:pre_post_final] = conv.pre_post_final
 
     # Convergence deltas between the last two points (NaN if <2 points)
-    m[:delta_wrms_tn] = conv.wrms_tn.final_abs_delta
-    m[:delta_chi2]    = conv.chisqr.final_abs_delta
+    metrics[:delta_wrms_tn] = conv.wrms_tn.final_abs_delta
+    metrics[:delta_chi2]    = conv.chisqr.final_abs_delta
 
     # Global AD after white-noise fit (if performed)
-    if final_it.white_noise_fit !== nothing
-        m[:ad_white_fit] = final_it.white_noise_fit.global_stats.ad_statistic
+    if final_iter.white_noise_fit !== nothing
+        metrics[:ad_white_fit] = final_iter.white_noise_fit.global_stats.ad_statistic
     else
-        m[:ad_white_fit] = NaN
+        metrics[:ad_white_fit] = NaN
     end
 
-    return m
+    return metrics
 end
 
 """
@@ -101,39 +104,80 @@ end
 
 Top-level container with everything you usually want after a run.
 
-Fields
-- `iterations`      : all internal iterations (may be empty if not saved)
-- `final_index`     : index of the last successful iteration (falls back to last)
-- `final`           : the final iteration result (by `final_index`)
-- `convergence`     : convergence summary across iterations
-- `par_file_final`  : written output par-file (if available)
-- `param_estimates` : map `:NAME => (value, uncertainty)` extracted from the final iteration
-- `residuals`       : residual statistics group for the final iteration (or `nothing`)
-- `white_noise`     : per-backend white-noise fit for the final iteration (or `nothing`)
-- `metrics`         : compact scalar metrics for quick ranking/comparison
-- `subresults`      : optional nested results (e.g., per-epoch, per-band, grid cells)
-- `subresult_type`  : tag describing what `subresults` mean (e.g., `:epoch`, `:band`, `:grid`)
-- `metadata`        : extra info (paths, timings, seeds, etc.)
+Fields (stored)
+- `iterations`            : all internal iterations
+- `final_index`           : index of the *last* iteration (== `length(iterations)`)
+- `last_successful_index` : 0 if there were no successful iterations
+- `success`               : quick boolean flag; true iff the run is considered successful
+- `status`                : low-level run status (`:ok | :engine_failed | :parse_failed | :files_missing | :unknown`)
+- `convergence`           : convergence summary across iterations
+- `metrics`               : compact scalar metrics for quick ranking/comparison
+- `param_estimates`       : map `:NAME => (value, uncertainty)` extracted from the *final* iteration
+- `par_file_final`        : written output par-file (if available)
+- `subresults`            : optional nested results (e.g., per-epoch, per-band, grid cells)
+- `subresult_type`        : tag describing what `subresults` mean (e.g., `:epoch`, `:band`, `:grid`)
+- `metadata`              : extra info (paths, timings, seeds, etc.)
+
+Virtual properties (accessible via `res.final` / `res.last_successful`):
+- `final`                 : alias for `res.iterations[res.final_index]`
+- `last_successful`       : `nothing` if `last_successful_index == 0`, otherwise
+                            `res.iterations[res.last_successful_index]`
+- `residual_stats`        : alias for `res.final.stats`
+- `white_noise`           : alias for `res.final.white_noise_fit`
+  (`white_noise_fit` is also available)
 """
 struct GeneralTempoResult
+    # core timeline
     iterations::Vector{InternalIterationResult}
-    final_index::Int
-    final::InternalIterationResult
+    final_index::Int                  # == length(iterations)
+    last_successful_index::Int        # 0 if there were no successful iterations
 
+    # run verdict
+    success::Bool
+    status::Symbol                    # :ok | :engine_failed | :parse_failed | :files_missing | :unknown
+
+    # analysis
     convergence::ConvergenceInfo
+    metrics::Dict{Symbol, Float64}    # compact numeric metrics
+    param_estimates::Dict{Symbol, ParamEstimate}
+
+    # artifacts from the (true) final iteration
     par_file_final::Union{TempoParFile, Nothing}
 
-    param_estimates::Dict{Symbol, ParamEstimate}
-    residuals::Union{ResidualStatisticsGroup, Nothing}
-    white_noise::Union{WhiteNoiseFitResult, Nothing}
-
-    metrics::Dict{Symbol, Float64}
-
+    # optional nesting
     subresults::Vector{GeneralTempoResult}
     subresult_type::Union{Symbol, Nothing}
 
+    # everything else (paths, timings, policies…)
     metadata::Dict{Symbol, Any}
 end
+
+# --- virtual properties for convenient access ---
+function Base.getproperty(r::GeneralTempoResult, s::Symbol)
+    if s === :final
+        return getfield(r, :iterations)[getfield(r, :final_index)]
+    elseif s === :last_successful
+        lsi = getfield(r, :last_successful_index)
+        return lsi == 0 ? nothing : getfield(r, :iterations)[lsi]
+    elseif s === :residual_stats
+        return getproperty(getproperty(r, :final), :stats)
+    elseif s === :white_noise_fit
+        return getproperty(getproperty(r, :final), :white_noise_fit)
+    else
+        return getfield(r, s)
+    end
+end
+
+# --- property names for REPL/tab-completion ---
+function Base.propertynames(r::GeneralTempoResult, private::Bool=false)
+    # real struct fields
+    names = fieldnames(typeof(r))
+    # virtual properties we provide via getproperty
+    return (names..., :final, :last_successful, :residual_stats, :white_noise_fit)
+end
+
+# # Keep hasproperty in sync with propertynames/getproperty
+Base.hasproperty(r::GeneralTempoResult, s::Symbol) = (s in propertynames(r))
 
 # ---------- pretty print ----------
 function Base.show(io::IO, ::MIME"text/plain", r::GeneralTempoResult)
@@ -143,28 +187,30 @@ function Base.show(io::IO, ::MIME"text/plain", r::GeneralTempoResult)
     iop  = IOContext(io, :indent => indent + 4)
 
     println(io, pad,  "GeneralTempoResult:")
-    println(io, spad, "iterations:      ", length(r.iterations), " entries")
-    println(io, spad, "final_index:     ", r.final_index)
-    println(io, spad, "final:           present")
-    println(io, spad, "convergence:     ", r.convergence.converged ? "yes" : "no")
-    if r.par_file_final !== nothing
-        println(io, spad, "par_file_final:  present")
-    else
-        println(io, spad, "par_file_final:  -")
-    end
-    println(io, spad, "param_estimates: ", length(r.param_estimates), " keys")
-    println(io, spad, "residuals:       ", r.residuals === nothing ? "-" : "present")
-    println(io, spad, "white_noise:     ", r.white_noise === nothing ? "-" : "present")
-    println(io, spad, "metrics:         ", isempty(r.metrics) ? "-" : string(length(r.metrics), " keys"))
+    println(io, spad, "iterations:            ", length(r.iterations), " entries")
+    println(io, spad, "final_index:           ", r.final_index)
+    println(io, spad, "final:                 ", (r.final_index > 0 && length(r.iterations) >= r.final_index) ? "present" : "-")
+    println(io, spad, "last_successful_index: ", r.last_successful_index == 0 ? "-" : string(r.last_successful_index, r.last_successful_index == r.final_index ? " (==final)" : ""))
+    println(io, spad, "last_successful:       ", (r.last_successful_index == 0 ? "-" : "present"))
+
+    println(io, spad, "success:               ", r.success ? "yes" : "no")
+    println(io, spad, "status:                ", r.status)
+
+    println(io, spad, "convergence:           ", r.convergence.converged ? "yes" : "no")
+    println(io, spad, "metrics:               ", isempty(r.metrics) ? "-" : string(length(r.metrics), " keys"))
+    println(io, spad, "param_estimates:       ", isempty(r.param_estimates) ? "-" : string(length(r.param_estimates), " keys"))
+
+    println(io, spad, "par_file_final:        ", r.par_file_final === nothing ? "-" : "present")
+
     if !isempty(r.subresults)
-        println(io, spad, "subresults:     ", length(r.subresults), " (type=", r.subresult_type, ")")
+        println(io, spad, "subresults:            ", length(r.subresults), " (type=", r.subresult_type, ")")
     else
-        println(io, spad, "subresults:      -")
+        println(io, spad, "subresults:            -")
     end
-    isempty(r.metadata) || println(io, spad, "metadata keys:   ", isempty(r.metadata) ? "-" : string(length(r.metadata), " keys"))
+
+    println(io, spad, "metadata keys:         ", isempty(r.metadata) ? "-" : string(length(r.metadata), " keys"))
 end
 
-# Base.show(io::IO, r::GeneralTempoResult) = show(io, MIME"text/plain"(), r)
 
 # ---------- helpers ----------
 # Extract (value, uncertainty) from the final fit parameters
@@ -180,15 +226,19 @@ function _extract_param_estimates(fit_params::Vector{FitParameter})
     return out
 end
 
-# Find last successful iteration (no TEMPO error); fallback to last index
-function _last_successful_index(iters::Vector{InternalIterationResult})
-    idx = findlast(it -> !iserror(it.output.error), iters)
-    return idx === nothing ? length(iters) : idx
+function _extract_param_estimates(fit_params::Nothing)
+    return Dict{Symbol, ParamEstimate}()
+end
+
+# Find last successful iteration (no TEMPO error and has stats); return 0 if none
+function _last_successful_index(iters::Vector{InternalIterationResult})::Int
+    idx = findlast(ir -> (!iserror(ir.output.error) && ir.stats !== nothing), iters)
+    return idx === nothing ? 0 : idx
 end
 
 # ---------- main builder ----------
 """
-    GeneralTempoResult(
+    build_general_tempo_result(
         iterations;
         par_file_final=nothing,
         subresults=GeneralTempoResult[],
@@ -198,14 +248,14 @@ end
     )
 
 Build a `GeneralTempoResult` from a list of `InternalIterationResult`s.
-- Picks the last successful iteration as `final`.
-- Computes convergence across all iterations.
-- Extracts parameter estimates from the final iteration.
-- Carries over residual stats and white-noise fit from the final iteration.
+- Uses the *last* iteration as `final` (index `final_index = length(iterations)`).
+- Computes `last_successful_index` (last iteration with no error and with stats); 0 if none.
+- Computes convergence across all iterations with available stats.
+- Extracts parameter estimates from the *final* iteration.
 - Computes `metrics` via `build_core_metrics(final, convergence)` and optionally merges
   a user-supplied `metrics_hook(final, convergence)` dictionary (values must be `Real`).
 """
-function GeneralTempoResult(
+function build_general_tempo_result(
     iterations::Vector{InternalIterationResult};
     par_file_final::Union{TempoParFile,Nothing}=nothing,
     subresults::Vector{GeneralTempoResult}=GeneralTempoResult[],
@@ -213,18 +263,26 @@ function GeneralTempoResult(
     metadata::Dict{Symbol,Any}=Dict{Symbol,Any}(),
     metrics_hook::Union{Nothing,Function}=nothing,
 )
-    isempty(iterations) && error("GeneralTempoResult: iterations are empty")
+    isempty(iterations) && error("build_general_tempo_result: iterations are empty")
 
-    final_idx = _last_successful_index(iterations)
-    final_it  = iterations[final_idx]
+    final_index = length(iterations)
+    final_iteration  = iterations[final_index]
+
+    last_success_index = _last_successful_index(iterations)  # Int, 0 if none
+
+    # Success policy: prefer explicit metadata keys; fall back to iteration status
+    success = haskey(metadata, :success) ? Bool(metadata[:success]) :
+          haskey(metadata, :status)  ? (metadata[:status] == :ok) :
+          !iserror(final_iteration.output.error)
+
+    status  = get(metadata, :status, :unknown)
 
     conv   = build_convergence_info(iterations)
-    params = _extract_param_estimates(final_it.output.fit_parameters)
-
-    core = build_core_metrics(final_it, conv)
+    param_estimates = _extract_param_estimates(final_iteration.output.fit_parameters)
+    metrics = build_core_metrics(final_iteration, conv)
 
     if metrics_hook !== nothing
-        extra_any = metrics_hook(final_it, conv)
+        extra_any = metrics_hook(final_iteration, conv)
         @assert extra_any isa AbstractDict "metrics_hook must return a Dict-like object"
         # coerce to Float64, allow Int/Real; drop non-finite to keep metrics clean
         extra = Dict{Symbol,Float64}()
@@ -239,43 +297,31 @@ function GeneralTempoResult(
                 end
             end
         end
-        merge!(core, extra)  # user values override core if keys collide
+        merge!(metrics, extra)  # user values override core if keys collide
     end
 
     return GeneralTempoResult(
         iterations,
-        final_idx,
-        final_it,
+        final_index,
+        last_success_index,
+        success,
+        status,
         conv,
+        metrics,
+        param_estimates,
         par_file_final,
-        params,
-        final_it.stats,
-        final_it.white_noise_fit,
-        core,
         subresults,
         subresult_type,
         metadata,
     )
 end
 
-# Convenience constructor from a single iteration
-function GeneralTempoResult(
-    iter::InternalIterationResult;
-    par_file_final::Union{TempoParFile,Nothing}=nothing,
-    subresults::Vector{GeneralTempoResult}=GeneralTempoResult[],
-    subresult_type::Union{Symbol,Nothing}=nothing,
-    metadata::Dict{Symbol,Any}=Dict{Symbol,Any}(),
-    metrics_hook::Union{Nothing,Function}=nothing,
-)
-    return GeneralTempoResult([iter];
-        par_file_final = par_file_final,
-        subresults = subresults,
-        subresult_type = subresult_type,
-        metadata = metadata,
-        metrics_hook = metrics_hook,
-    )
-end
-
 "Safe lookup of a scalar metric from `GeneralTempoResult.metrics`."
+
 result_metric(res::GeneralTempoResult, key::Symbol)::Float64 =
     get(res.metrics, key, NaN)
+
+
+
+
+

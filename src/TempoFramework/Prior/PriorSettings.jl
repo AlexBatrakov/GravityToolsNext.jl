@@ -63,7 +63,7 @@ struct PriorExecutionOptions
         workdir_layout::Symbol   = :per_node,
         node_dir_prefix::String  = "nodes/node_",
         keep_node_dirs::Bool     = true,
-        on_error::Symbol         = :collect,
+        on_error::Symbol         = :stop,
         dir_name_mode::Symbol    = :index_only,   # or :with_value
         index_pad::Int           = 3,
         value_sig::Int           = 6,

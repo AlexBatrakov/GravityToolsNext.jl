@@ -121,9 +121,15 @@ function _maybe_save_result(res::GeneralTempoResult, tag::AbstractString, root_d
     save_result_jld2(res; filename = _grid_point_result_path(root_dir, opts, tag))
 end
 
+function _save_grid_result(grid::AdaptiveRefinement2DGrid)
+    jldsave(filename; grid=grid)
+    return nothing
+end
+
 # -- Execution ----------------------------------------------------------------
 
-function run_task(task::Adaptive2DGridTask)
+function run_task(task::Adaptive2DGridTask; grid_init = nothing, just_refine = false)::AdaptiveRefinement2DGrid
+    # Prepare workspace
     base_root = task_workdir(task.base_task)
     grid_root_abs = isabspath(task.opts.grid_root) ? task.opts.grid_root : joinpath(base_root, task.opts.grid_root)
     mkpath(grid_root_abs)
@@ -134,7 +140,7 @@ function run_task(task::Adaptive2DGridTask)
     end
 
     # 0) Build initial grid holder
-    grid_init = AdaptiveRefinement2DGrid(task.x, task.y, task.ref_settings)
+    grid_init = isnothing(grid_init) ? AdaptiveRefinement2DGrid(task.x, task.y, task.ref_settings) : grid_init
     keys_tuple = Tuple(task.ref_settings.params_to_save)
 
     # 1) Construct per-point target function for the grid engine
@@ -152,9 +158,12 @@ function run_task(task::Adaptive2DGridTask)
             work_dir  = ws.work_dir,
         )
 
+        param_name = task.ref_settings.units[1].name
+
         println("Run started:  $(task.x.name) = $xv, $(task.y.name) = $yv")
         res = run_task(point_task)
-        println("Run finished: $(task.x.name) = $xv, $(task.y.name) = $yv; chi2_fit = $(get(res.metrics, :chi2_fit, NaN))")
+        println("Run finished: $(task.x.name) = $xv, $(task.y.name) = $yv;\n
+            $param_name = $(get(res.metrics, param_name, NaN)), pre_post_final = $(get(res.metrics, :pre_post_final, NaN))")
 
         _maybe_save_result(res, tag, grid_root_abs, task.opts)
         return _extract_namedtuple(res, keys_tuple)
@@ -167,7 +176,11 @@ function run_task(task::Adaptive2DGridTask)
     end
 
     # 3) Run the adaptive grid calculation (your engine owns the loop)
-    grid_refined = calculate_2DGrid(grid_init, target_function, params_function!)
+    if just_refine
+        grid_refined = refine_2DGrid(grid_init, target_function, params_function!)
+    else
+        grid_refined = calculate_2DGrid(grid_init, target_function, params_function!)
+    end
 
     return grid_refined
 end

@@ -130,7 +130,7 @@ _rule_values(::ExplicitRule, lin::Vector{Float64}; min_hint::Float64=NaN) = lin
     GridAxis(name; min, max, N, rule)
     GridAxis(name, values::AbstractVector)
 
-A typed grid axis with a chosen discretization rule. Call [`values`](@ref) to
+A typed grid axis with a chosen discretization rule. Call [`axisvalues`](@ref) to
 obtain physical coordinates and [`linspace`](@ref) to obtain the rule's linear
 parameterization.
 
@@ -206,7 +206,7 @@ The result is a copy (safe to mutate by the caller).
 linspace(ax::GridAxis) = copy(ax.lin_values)
 
 """
-    values(ax)
+    axisvalues(ax)
 
 Return the *physical* coordinates for an axis. For `LogAxis`, uses the rule
 sign (`+1/−1`) or infers it from `ax.min` when the rule is constructed with
@@ -214,14 +214,8 @@ sign (`+1/−1`) or infers it from `ax.min` when the rule is constructed with
 
 The result is a copy (safe to mutate by the caller).
 """
-values(ax::GridAxis) = copy(ax.values)
+axisvalues(ax::GridAxis) = copy(ax.values)
 
-"""
-    axisvalues(ax)
-Alias for [`values(ax)`](@ref). Provided to avoid accidental name shadowing
-in user code that defines local variables named `values`.
-"""
-axisvalues(ax::GridAxis) = values(ax)
 
 # == Printing =================================================================
 
@@ -254,7 +248,7 @@ function refine(ax::LogAxis)
 end
 
 function refine(ax::ExplicitAxis)
-    v = values(ax)
+    v = axisvalues(ax)
     n = length(v)
     n <= 1 && return ax  # nothing to refine
 

@@ -24,24 +24,6 @@ end
 # --- helpers ----------------------------------------------------------------------------------------------------
 
 """
-    _load_tim_file(tim_path::AbstractString) :: Union{Vector{TimTOAEntry},Nothing}
-
-Attempt to read a TEMPO/TEMPO2 `.tim` file. Returns the parsed
-`Vector{TimTOAEntry}` on success, or `nothing` if the file is missing or fails
-to parse (a warning is logged in that case).
-"""
-function _load_tim_file(tim_path::AbstractString)::Union{Vector{TimTOAEntry},Nothing}
-    if isfile(tim_path)
-        try
-            return read_tim_file(tim_path)
-        catch err
-            @warn "Failed to read TIM file" path=tim_path error=err
-        end
-    end
-    return nothing
-end
-
-"""
     _load_final_par_file(par_out_path::AbstractString) :: Union{TempoParFile,Nothing}
 
 Attempt to read the final output `.par` file produced by TEMPO/TEMPO2.
@@ -102,7 +84,7 @@ function run_task(task::BasicTempoTask)::GeneralTempoResult
     niter = length(parsed_iter_outputs)
 
     # 2) Read TIM entries
-    tim_entries = _load_tim_file(artifacts.tim_path)
+    tim_entries = read_tim_file_safe(artifacts.tim_path)
     tim_count = tim_entries === nothing ? missing : length(tim_entries)
 
     # 3) Decide which iterations get white-noise analysis
@@ -125,6 +107,9 @@ function run_task(task::BasicTempoTask)::GeneralTempoResult
         )
         push!(iter_results, iter_res)
     end
+
+    # Indices for transparency: last iteration vs last successful with stats
+    last_index = niter
 
     # 5) Optionally load the final par-file written by TEMPO
     par_file_final = _load_final_par_file(artifacts.par_out_path)
@@ -159,9 +144,12 @@ function run_task(task::BasicTempoTask)::GeneralTempoResult
         :finished_at    => run_out.finished_at,
         :duration_s     => run_out.duration_s,
         :stderr_tail    => run_out.stderr_tail,
+        :status         => run_out.status,      # standardized duplicate of :run_status
+        :success        => run_out.success,     # standardized duplicate of :run_success
+        :last_index     => last_index,
     )
 
-    result = GeneralTempoResult(iter_results; par_file_final, metadata)
+    result = build_general_tempo_result(iter_results; par_file_final, metadata)
 
     # Post-run hygiene: remove tmp/CWD per keep_tmp_on_* policies (safe after reading artifacts)
     cleanup_run!(run_out, settings)

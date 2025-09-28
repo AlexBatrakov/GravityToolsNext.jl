@@ -1,0 +1,13 @@
+lvl_1sigma = quantile(Chisq(2), 0.682689492137086)
+lvl_2sigma = quantile(Chisq(2), 0.954499736103642)
+lvl_3sigma = quantile(Chisq(2), 0.997300203936740)
+lvl_4sigma = quantile(Chisq(2), 0.999936657516334)
+lvl_5sigma = quantile(Chisq(2), 0.999999426696856)
+lvl_6sigma = quantile(Chisq(2), 0.999999998026825)
+lvl_7sigma = quantile(Chisq(2), 0.999999999997440)
+
+lvl_68CL = quantile(Chisq(2), 0.68)
+lvl_90CL = quantile(Chisq(2), 0.90)
+lvl_95CL = quantile(Chisq(2), 0.95)
+lvl_99CL = quantile(Chisq(2), 0.99)
+lvl_997CL = quantile(Chisq(2), 0.997)

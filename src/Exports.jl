@@ -9,7 +9,7 @@
 # AdaptiveGridFramework / GridAxes 
 # ------------------------------------------------------------------------------------------------------------
 export AbstractGridRule, LinRule, LogRule, ExplicitRule, GridAxis
-export LinAxis, LogAxis, ExplicitAxis, linspace, values, axisvalues, refine
+export LinAxis, LogAxis, ExplicitAxis, linspace, axisvalues, refine
 
 # ------------------------------------------------------------------------------------------------------------
 # AdaptiveGridFramework / RefinementSettings
@@ -31,6 +31,12 @@ export AdaptiveRefinement2DGrid, cell_selector, calculate_2DGrid, precalculate_2
 # Utils / PrettyPrinting 
 # ------------------------------------------------------------------------------------------------------------
 export print_aligned_table
+
+# ------------------------------------------------------------------------------------------------------------
+# Utils / Levels
+# ------------------------------------------------------------------------------------------------------------
+export lvl_1sigma, lvl_2sigma, lvl_3sigma, lvl_4sigma, lvl_5sigma, lvl_6sigma, lvl_7sigma
+export lvl_68CL, lvl_90CL, lvl_95CL, lvl_99CL, lvl_997CL
 
 # ------------------------------------------------------------------------------------------------------------------------------
 # TempoFramework
@@ -60,8 +66,11 @@ export TimTOAEntry,
        TempoResidualEntry,
        CombinedTOAEntry,
        read_tim_file,
+       read_tim_file_safe,
        read_residual_file,
-       combine_tim_and_residuals
+       read_residual_file_safe,
+       combine_tim_and_residuals,
+       combine_tim_and_residuals_safe
 
 # ------------------------------------------------------------------------------------------
 # TempoFramework / TempoCore / TempoOutput.jl
@@ -161,6 +170,7 @@ export InternalIterationResult,
 # TempoFramework / TempoCore / Result / GeneralResult.jl
 # ------------------------------------------------------------------------
 export GeneralTempoResult,
+       build_general_tempo_result,
        result_metric,
        has_converged
 

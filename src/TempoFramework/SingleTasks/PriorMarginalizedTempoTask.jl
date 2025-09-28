@@ -93,6 +93,20 @@ _resolve_mref(::PriorMarginalizationSettings, thetas::Vector{Float64}, metrics::
     minimum(metrics)  # nodes-only baseline; no spline/interp
 
 """
+    _check_nodes_for_error(nodes, on_error) -> Union{Nothing, Int}
+
+Return the 1-based index of the first failing node according to the policy, or
+`nothing` if execution should proceed. Currently supports `on_error == :stop`.
+"""
+@inline function _check_nodes_for_error(nodes::Vector{_PriorNodeResult}, on_error::Symbol)::Union{Nothing, Int}
+    if on_error === :stop
+        i = findfirst(n -> !n.result.success, nodes)
+        return i === nothing ? nothing : Int(i)
+    end
+    return nothing
+end
+
+"""
     _resolve_reference(s, thetas, metrics) -> (θref, mref)
 
 Choose a reference θ and its metric value used for χ² shifting and reporting.
@@ -244,7 +258,7 @@ Construct a per-node task by:
 """
 function _make_node_task(base_task::SingleTempoTask,
                          s::PriorMarginalizationSettings,
-                         i::Int, θ::Float64)
+                         i::Int, θ::Float64, initial::Bool)
 
     # 1) build leaf name (no leading "nodes/"), then derive tag and temp_dir
     node_dir = build_node_dirname(s.exec_options.node_dir_prefix, i;
@@ -257,13 +271,13 @@ function _make_node_task(base_task::SingleTempoTask,
     # tag used in filenames is the last segment only
     node_tag = basename(normpath(String(node_dir)))
 
-    @info "Preparing node $i: node_tag=$(node_tag), θ=$(round(θ, sigdigits=6))"
-    @info "  node_dir: $(node_dir)"
+    # @info "Preparing node $i: node_tag=$(node_tag), θ=$(round(θ, sigdigits=6))"
+    # @info "  node_dir: $(node_dir)"
 
     # 3) per-node par_output name (from base par_output stem)
     par_out = task_derive_par_output(base_task, node_tag)
 
-    @info "  par_output: $par_out"
+    # @info "  par_output: $par_out"
 
     # 4) build the cloned task
     node_task = task_copy_with(base_task;
@@ -271,6 +285,7 @@ function _make_node_task(base_task::SingleTempoTask,
         par_output = par_out,
         io_mirror  = (:depth_minus, 2),                 # can take from s.exec_options
         override_params_upsert = [TP(String(s.parameter), θ, flag = tempo_flag(s.pin_mode))],
+        overwrite = initial ? :clean : :reuse,
         # optionally: snapshot_par / overwrite / layout / keep_tmp_* etc.
     )
 
@@ -299,6 +314,7 @@ end
 
 Run node tasks sequentially (optionally in chained mode) and collect node results.
 Handles per-node task derivation, execution, metric extraction, and chaining source updates.
+Implements `on_error == :stop` policy for early stopping on node failure.
 """
 function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
                             thetas::Vector{Float64})::Vector{_PriorNodeResult}
@@ -306,6 +322,10 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
     base_dir = task_workdir(task.base_task)
     n        = length(thetas)
     out      = Vector{_PriorNodeResult}(undef, n)
+
+    # on_error policy and early stop flag
+    on_error = task.settings.exec_options.on_error
+    stopped_early = false
 
     # traversal order
     idxs = (s.exec_options.chain_direction === :backward) ? collect(n:-1:1) : collect(1:n)
@@ -315,7 +335,7 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
 
     for i in idxs
         θ = thetas[i]
-        node_task, node_tag, node_dir, _ = _make_node_task(task.base_task, s, i, θ)
+        node_task, node_tag, node_dir, _ = _make_node_task(task.base_task, s, i, θ, i == idxs[1])
 
         # chaining: pass previous node's final par as input
         if s.exec_options.mode === :chained && prev_par_rel !== nothing
@@ -326,12 +346,17 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
         end
 
         res = run_task(node_task)
-        m   = _extract_metric(res, s.likelihood_source)
+        m = res.success ? _extract_metric(res, s.likelihood_source) : NaN
 
         # working directory (from metadata if available -- should be available)
         run_cwd = get(res.metadata, :run_cwd, joinpath(base_dir, node_dir))
 
         out[i] = _PriorNodeResult(i, θ, run_cwd, m, prior_pdf(s.prior, θ), res)
+
+        if (on_error === :stop) && !res.success
+            stopped_early = true
+            break
+        end
 
         # update chaining source for the next node (make path relative to base_dir)
         if s.exec_options.mode === :chained
@@ -342,6 +367,18 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
                 prev_par_rel = nothing
             end
         end
+    end
+
+    if stopped_early
+        # Keep only the entries that were actually assigned
+        assigned = _PriorNodeResult[]
+        sizehint!(assigned, n)
+        for k in 1:n
+            if isassigned(out, k)
+                push!(assigned, out[k])
+            end
+        end
+        return assigned
     end
 
     return out
@@ -360,12 +397,21 @@ end
     _integrate_posterior(thetas, metrics, prior; kwargs...) -> NamedTuple
 
 Spline-approximate χ²(θ) from node metrics, combine with the prior to form a continuous
-posterior p(θ) ∝ exp(logL(θ))·π(θ), and evaluate evidence, posterior moments, and χ² summaries.
+posterior p(θ) ∝ exp(logL(θ))·π(θ), and evaluate evidence (log-domain), posterior moments,
+and χ² summaries.
 
 Returns a named tuple with fields:
-- `Z` (evidence), `mean`, `var`, `std`, `median`, `mode`, `quad_error`,
+- `logZ`  (log-evidence), `evidence` (may be `Inf` if `exp(logZ)` overflows),
+  `mean`, `var`, `std`, `median`, `mode`, `quad_error`,
 - `θgrid`, `pgrid` (normalized density on the returned grid),
 - `chi2_post_mean_spline`, `chi2_at_post_mean_spline`, `chi2_marginalized`.
+
+Notes
+- Numerical stabilization uses `c = max(Lgrid)` and integrates `Z0 = ∫ exp(L(θ)−c) dθ`.
+  Then: `logZ = log(Z0) + c`. We avoid forming `Z = Z0*exp(c)` directly.
+- Moments are computed as ratios in the stabilized domain: `E[θ] = m1/Z0`,
+  `E[θ²] = m2/Z0`, `Var[θ] = E[θ²] − E[θ]²`.
+- `chi2_marginalized = −2*logZ + mref` is stable even when `exp(logZ)` would overflow.
 """
 function _integrate_posterior(
     thetas::Vector{Float64},
@@ -373,7 +419,7 @@ function _integrate_posterior(
     prior::AbstractPriorSpec;
     likelihood_source::Symbol = :chi2_fit,
     mref::Float64,
-    k::Int=3, s::Float64=0.0,          # spline χ²
+    k::Int=1, s::Float64=0.0,          # spline χ²
     refine::Int=801,                   # grid density for quantiles
     rtol::Float64=1e-6
 )
@@ -391,8 +437,8 @@ function _integrate_posterior(
     end
 
     # 2) loglike
-    loglike(θ) = likelihood_source === :chi2_fit ? -0.5*(Sχ2(θ) - mref) :
-                 error("only :chi2_fit demoed here")
+    loglike(θ) = (likelihood_source === :chi2_fit || likelihood_source === :chi2_fit_basic) ? -0.5*(Sχ2(θ) - mref) :
+                 error("only :chi2_fit and :chi2_fit_basic demoed here")
 
     # 3) logprior
     logprior(θ) = log(max(prior_pdf(prior, θ), eps()))
@@ -427,18 +473,21 @@ function _integrate_posterior(
     Lgrid = [L(θ) for θ in θgrid]
     c = maximum(Lgrid)
 
-    # 6) integrals
+    # 6) integrals (log-domain stabilization, overflow-safe)
     f(θ) = exp(L(θ) - c)
     Z0, errZ = quadgk(f, θlo, θhi; rtol=rtol)
-    Z = Z0 * exp(c)
+    # Log-evidence and overflow-safe evidence
+    logZ = log(Z0) + c
+    # Float64 overflow threshold for exp(x)
+    EMAX = log(floatmax(Float64))
+    evidence = logZ < EMAX ? exp(logZ) : Inf
 
+    # First and second stabilized moments for θ
     m1_0, _ = quadgk(θ -> θ * f(θ), θlo, θhi; rtol=rtol)
-    meanθ = (m1_0 * exp(c)) / Z
-
-    # Compute second moment, variance, and std of the posterior
     m2_0, _ = quadgk(θ -> θ^2 * f(θ), θlo, θhi; rtol=rtol)
-    varθ = (m2_0 * exp(c)) / Z - meanθ^2
-    stdθ = sqrt(max(varθ, 0.0))
+    meanθ = Z0 > 0 ? (m1_0 / Z0) : NaN
+    varθ  = Z0 > 0 ? (m2_0 / Z0) - meanθ^2 : NaN
+    stdθ  = isfinite(varθ) && varθ >= 0 ? sqrt(varθ) : NaN
 
     # 7) grid-based CDF/quantiles/mode
     pgrid0 = exp.(Lgrid .- c)
@@ -476,9 +525,10 @@ function _integrate_posterior(
         acc
     end
     chi2_at_post_mean_spline = Sχ2(meanθ)
-    chi2_marginalized = -2 * log(Z) + mref
+    chi2_marginalized = -2 * logZ + mref
     return (
-        Z = Z,
+        logZ = logZ,
+        evidence = evidence,
         mean = meanθ,
         var = varθ,
         std = stdθ,
@@ -610,7 +660,8 @@ function _assemble_prior_result(task::PriorMarginalizedTempoTask,
         :post_var_spline     => integ.var,
         :post_median_spline  => integ.median,
         :post_mode_spline    => integ.mode,
-        :evidence            => integ.Z,
+        :log_evidence        => integ.logZ,
+        :evidence            => integ.evidence,
         :evidence_quad_error => integ.quad_error,
         :chi2_marginalized        => integ.chi2_marginalized,
         :chi2_post_mean_spline    => integ.chi2_post_mean_spline,
@@ -653,15 +704,52 @@ function _assemble_prior_result(task::PriorMarginalizedTempoTask,
     return GeneralTempoResult(
         rep_res.iterations,
         rep_res.final_index,
-        rep_res.final,
+        rep_res.last_successful_index,
+        rep_res.success,
+        rep_res.status,
         rep_res.convergence,
-        rep_res.par_file_final,
-        param_est_marg,
-        rep_res.residuals,
-        rep_res.white_noise,
         new_metrics,
+        param_est_marg,
+        rep_res.par_file_final,
         subres,
         subtyp,
+        meta,
+    )
+end
+
+"""
+    _bad_prior_result(task, bad_node, nodes_done) -> GeneralTempoResult
+
+Return the `GeneralTempoResult` of a failing node augmented with prior/marginalization
+context in metadata. Used when `on_error == :stop`.
+"""
+function _bad_prior_result(task::PriorMarginalizedTempoTask,
+                           bad:: _PriorNodeResult,
+                           nodes_done::Int)::GeneralTempoResult
+    s = task.settings
+    r = bad.result
+    meta = copy(r.metadata)
+    merge!(meta, Dict{Symbol,Any}(
+        :prior_parameter      => s.parameter,
+        :prior_on_error       => :stop,
+        :prior_nodes_done     => nodes_done,
+        :prior_failed_index   => bad.index,
+        :prior_failed_theta   => bad.theta,
+        :prior_failed_workdir => bad.workdir,
+        :prior_mode           => :stopped_on_error,
+    ))
+    return GeneralTempoResult(
+        r.iterations,
+        r.final_index,
+        r.last_successful_index,
+        r.success,
+        r.status,
+        r.convergence,
+        r.metrics,
+        r.param_estimates,
+        r.par_file_final,
+        GeneralTempoResult[],
+        nothing,
         meta,
     )
 end
@@ -674,14 +762,20 @@ end
 
 Execute the prior-marginalized task: build θ grid, run/supply node results,
 and assemble the aggregated `GeneralTempoResult`.
+
+If `settings.exec_options.on_error == :stop`, the execution stops at the first failing
+node (detected by `_check_nodes_for_error`) and returns that node's `GeneralTempoResult`
+annotated by `_bad_prior_result` with `:prior_mode => :stopped_on_error`.
 """
 function run_task(task::PriorMarginalizedTempoTask)::GeneralTempoResult
     s      = task.settings
     thetas = _build_thetas(s)
     node_results = s.exec_options.scheduler === :serial ?
         _run_nodes_serial!(task, thetas) : _run_nodes_distributed!(task, thetas)
-    # node_results = load("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_GR/node_results.jld2", "node_results")
-    # @info "Loaded $(length(node_results)) node results from JLD2."
+    bad_idx = _check_nodes_for_error(node_results, s.exec_options.on_error)
+    if bad_idx !== nothing
+        return _bad_prior_result(task, node_results[bad_idx], length(node_results))
+    end
     return _assemble_prior_result(task, thetas, node_results)
 end
 
@@ -690,6 +784,24 @@ function save_result_jld2(res::GeneralTempoResult; filename::AbstractString="fin
     file_path = joinpath(job_root, "results", filename)
     mkpath(dirname(file_path))
     @save file_path res
+end
+
+function task_stage_inputs!(task::PriorMarginalizedTempoTask, dest_dir::AbstractString)
+    task_stage_inputs!(task.base_task, dest_dir)
+end
+
+function task_copy_with(task::PriorMarginalizedTempoTask; kwargs...)
+    new_base_task = task_copy_with(task.base_task; kwargs...)
+    new_settings  = haskey(kwargs, :settings) ? kwargs[:settings] : task.settings
+    return PriorMarginalizedTempoTask(new_base_task, new_settings)
+end
+
+function task_workdir(task::PriorMarginalizedTempoTask)
+    return task_workdir(task.base_task)
+end
+
+function task_derive_par_output(task::PriorMarginalizedTempoTask, tag::AbstractString)
+    return task_derive_par_output(task.base_task, tag)
 end
 
 # --------------------------------------------------------------------------------------------------------------

@@ -284,22 +284,24 @@ Parse a single iteration section:
 If any step fails, returns an output with `error` set, others `nothing`.
 """
 function parse_internal_iteration_tempo_output(section::String, ::Type{Tempo2})::InternalIterationOutput
-    err = parse_tempo_output_error(section, Tempo2)
-    if iserror(err)
-        return InternalIterationOutput(nothing, nothing, err)
-    end
+    err_err = parse_tempo_output_error(section, Tempo2)
+    # if iserror(err)
+    #     return InternalIterationOutput(nothing, nothing, err)
+    # end
 
-    basic, err = parse_basic_tempo_output(section, Tempo2)
-    if iserror(err)
-        return InternalIterationOutput(nothing, nothing, err)
-    end
+    basic, err_basic = parse_basic_tempo_output(section, Tempo2)
+    # if iserror(err)
+    #     return InternalIterationOutput(nothing, nothing, err)
+    # end
 
-    params, err = parse_fit_parameters(section, Tempo2)
-    if iserror(err)
-        return InternalIterationOutput(nothing, nothing, err)
-    end
+    params, err_params = parse_fit_parameters(section, Tempo2)
+    # if iserror(err)
+    #     return InternalIterationOutput(nothing, nothing, err)
+    # end
 
-    return InternalIterationOutput(basic, params, TempoOutputError())
+    err_total = iserror(err_err) ? err_err : (iserror(err_basic) ? err_basic : (iserror(err_params) ? err_params : TempoOutputError()))
+
+    return InternalIterationOutput(basic, params, err_total)
 end
 
 """

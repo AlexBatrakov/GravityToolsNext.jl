@@ -1,5 +1,26 @@
-# TempoDataFiles.jl
-# Reading TEMPO/TEMPO2 .tim and residual files, and combining them into a single per-TOA view.
+# src/TempoFramework/TempoCore/TempoDataFiles.jl
+# ----------------------------------------------------------------------------
+# Reading and combining TEMPO/TEMPO2 data files (.tim and residuals) into a
+# single per-TOA representation used by downstream analysis (statistics,
+# convergence, white-noise estimation).
+#
+# Design notes
+# - Strict vs Safe API:
+#     * Strict readers and combiners (`read_tim_file`, `read_residual_file`,
+#       `combine_tim_and_residuals`) validate invariants and may throw
+#       exceptions (e.g., `DimensionMismatch` on length mismatch). Use them in
+#       contexts where inputs are expected to be valid and failures are truly
+#       exceptional.
+#     * Safe wrappers (`*_safe`) centralize I/O error handling and never throw;
+#       they return `nothing` on missing files, I/O errors, empty inputs or
+#       incompatible lengths, and log a concise `@warn`. Use them when a
+#       graceful fallback is desired.
+# - Units: residual-related quantities (signal, residual, residual_tn,
+#   uncertainty) are converted to microseconds (×1e6) on read and kept in µs
+#   throughout; TOA uncertainties from `.tim` are treated as µs as well.
+# - Time window: optional `time_start`/`time_finish` (MJD) mark `in_fit` in the
+#   combined view; the window is inclusive when both bounds are provided.
+# ----------------------------------------------------------------------------
 
 # ------------------------------------------------------------
 # TIM (.tim) entries
@@ -27,14 +48,22 @@ struct TimTOAEntry
     backend::String
 end
 
-# Internal helper: detect comment/blank lines
+"""
+    _is_comment_or_blank(s)
+
+Internal: returns `true` if the line is blank or looks like a comment in a `.tim` file.
+"""
 _is_comment_or_blank(s::AbstractString) = begin
     t = strip(s)
     isempty(t) || startswith(t, "C") || startswith(t, "c") || startswith(t, "#")
 end
 
-# Internal helper: naive header length.
-# By default we keep backward-compat with "first 2 non-comment lines are header".
+"""
+    _header_length(clean_lines)
+
+Internal: returns the number of initial non-comment lines to treat as header.
+Backward-compatible default: first 2 non-comment lines.
+"""
 function _header_length(clean_lines::Vector{Tuple{Int,String}})
     # clean_lines: (original_line_number, line_text) after removing comments/blank
     # If there are fewer than 2 lines, use whatever is available.
@@ -42,7 +71,7 @@ function _header_length(clean_lines::Vector{Tuple{Int,String}})
 end
 
 """
-    read_tim_file(path::String) -> Vector{TimTOAEntry}
+    read_tim_file(path::AbstractString) -> Vector{TimTOAEntry}
 
 Reads a `.tim` file, skipping comment/blank lines, preserving original
 line numbers, and assuming the first two **non-comment** lines are header/meta.
@@ -53,7 +82,7 @@ Notes:
 - Backend is taken from the `-be <name>` flag if present; otherwise `"unknown"`.
 - Unparseable lines are skipped with a warning.
 """
-function read_tim_file(path::String)::Vector{TimTOAEntry}
+function read_tim_file(path::AbstractString)::Vector{TimTOAEntry}
     raw = open(path, "r") do io
         readlines(io)
     end
@@ -107,6 +136,24 @@ function read_tim_file(path::String)::Vector{TimTOAEntry}
     return entries
 end
 
+"""
+    read_tim_file_safe(path::AbstractString) -> Union{Nothing, Vector{TimTOAEntry}}
+
+Safe wrapper around `read_tim_file`. Returns `nothing` if the file does not
+exist or if any I/O/parsing exception is thrown while reading the file.
+Per-line parsing issues are still logged by `read_tim_file` as warnings.
+"""
+function read_tim_file_safe(path::AbstractString)::Union{Nothing, Vector{TimTOAEntry}}
+    isfile(path) || return nothing
+    try
+        return read_tim_file(path)
+    catch err
+        @warn "Failed to read .tim file" path=path exception=err
+        return nothing
+    end
+end
+
+
 # ------------------------------------------------------------
 # Residuals file (residuals.dat) entries
 # ------------------------------------------------------------
@@ -126,13 +173,13 @@ struct TempoResidualEntry
 end
 
 """
-    read_residual_file(path::String) -> Vector{TempoResidualEntry}
+    read_residual_file(path::AbstractString) -> Vector{TempoResidualEntry}
 
 Reads `residuals.dat` (or similar) with 5 columns:
 `time  signal  residual  residual_tn  uncertainty`.
 Signal, residuals, and uncertainty are converted to microseconds (×1e6).
 """
-function read_residual_file(path::String)::Vector{TempoResidualEntry}
+function read_residual_file(path::AbstractString)::Vector{TempoResidualEntry}
     lines = open(path, "r") do io
         readlines(io)
     end
@@ -159,6 +206,16 @@ function read_residual_file(path::String)::Vector{TempoResidualEntry}
         end
     end
     return entries
+end
+
+function read_residual_file_safe(path::AbstractString)::Union{Nothing, Vector{TempoResidualEntry}}
+    isfile(path) || return nothing
+    try
+        return read_residual_file(path)
+    catch err
+        @warn "Failed to read residual file" path=path exception=err
+        return nothing
+    end
 end
 
 # ------------------------------------------------------------
@@ -206,7 +263,8 @@ end
         -> Vector{CombinedTOAEntry}
 
 Combine `.tim` entries and residuals 1:1 (by index). Optional time window (`MJD`) marks
-`in_fit` for each entry. Length must match.
+`in_fit` for each entry. **Lengths must match**; this function throws a `DimensionMismatch`
+exception on mismatch. Use `combine_tim_and_residuals_safe` for a non-throwing variant.
 
 Notes:
 - `weight = 1 / uncertainty^2` if `uncertainty` is positive and finite; otherwise `0.0`.
@@ -220,7 +278,7 @@ function combine_tim_and_residuals(
 )::Vector{CombinedTOAEntry}
 
     N = length(tim_entries)
-    length(residuals) == N || error("Mismatched lengths: tim_entries = $N, residuals = $(length(residuals))")
+    length(residuals) == N || throw(DimensionMismatch("Mismatched lengths: tim_entries = $N, residuals = $(length(residuals))"))
 
     entries = Vector{CombinedTOAEntry}(undef, N)
 
@@ -258,4 +316,47 @@ function combine_tim_and_residuals(
     end
 
     return entries
+end
+
+"""
+    combine_tim_and_residuals_safe(
+        tim_entries::Union{Nothing,Vector{TimTOAEntry}},
+        residuals::Union{Nothing,Vector{TempoResidualEntry}};
+        time_start::Union{Nothing,Float64}=nothing,
+        time_finish::Union{Nothing,Float64}=nothing,
+    ) -> Union{Nothing, Vector{CombinedTOAEntry}}
+
+Safe (non-throwing) wrapper around `combine_tim_and_residuals`.
+Returns `nothing` in any of the following cases (and logs a warning):
+- `tim_entries === nothing` or `residuals === nothing`
+- either input is empty
+- length mismatch between the two inputs
+
+Otherwise, returns the combined vector.
+"""
+function combine_tim_and_residuals_safe(
+    tim_entries::Union{Nothing,Vector{TimTOAEntry}},
+    residuals::Union{Nothing,Vector{TempoResidualEntry}};
+    time_start::Union{Nothing,Float64}=nothing,
+    time_finish::Union{Nothing,Float64}=nothing,
+)::Union{Nothing, Vector{CombinedTOAEntry}}
+
+    if tim_entries === nothing
+        @warn "combine_tim_and_residuals_safe: no TIM entries provided"
+        return nothing
+    end
+    if residuals === nothing
+        @warn "combine_tim_and_residuals_safe: no residuals provided"
+        return nothing
+    end
+    if isempty(tim_entries) || isempty(residuals)
+        @warn "combine_tim_and_residuals_safe: empty inputs" n_tim=length(tim_entries) n_res=length(residuals)
+        return nothing
+    end
+    if length(tim_entries) != length(residuals)
+        @warn "combine_tim_and_residuals_safe: length mismatch" n_tim=length(tim_entries) n_res=length(residuals)
+        return nothing
+    end
+
+    return combine_tim_and_residuals(tim_entries, residuals; time_start=time_start, time_finish=time_finish)
 end

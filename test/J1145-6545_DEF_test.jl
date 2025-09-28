@@ -8,15 +8,15 @@ addprocs(8)
 
 
 basic_settings = TempoRunSettings(
-    work_dir = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST",
-    par_input = "DDSTG_DEF_SCINT_RN84_noRN.par",
-    par_output = "DDSTG_DEF_SCINT_RN84_noRN_out.par",
-    tim_input = "J1141-6545_pn_new_noRN.tim",
+    work_dir = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF",
+    par_input = "DDSTG_DEF_SCINT_RN84_base.par",
+    par_output = "DDSTG_DEF_SCINT_RN84_out.par",
+    tim_input = "J1141-6545_pn_new.tim",
     tempo_version = Tempo2(),
     flags = "",
-    nits = 4,
+    nits = 5,
     gain = 1,
-    override_params = [TP("STG_BETA0", 2.0), TP("STG_ALPHA0", -0.00316227766016837939442)],
+    override_params = [TP("STG_BETA0", 0.0), TP("STG_ALPHA0", 0.0), TP("EOS", "MPA1")],
     # time_start = nothing,
     # time_finish = nothing,
     write_output = true,
@@ -51,7 +51,7 @@ prior_settings = PriorMarginalizationSettings(
         parameter = :DDOT,
         pin_mode = :fixed,
         prior = SampledPrior("J1141-6545_DDOT_prior.dat"),
-        nodes = ClenshawCurtisNodes(6),
+        nodes = ClenshawCurtisNodes(4),
         likelihood_source = :chi2_fit_basic,
         ref_strategy = :prior_median,
         representative = :prior_median,
@@ -84,25 +84,27 @@ grid_task = Adaptive2DGridTask(
         params_to_save = (:chi2_marginalized, :wrms_fit, :wrms_tn_fit, :ad_white_fit, :pre_post_final, :F0, :F1, :F2, :PB, :T0, :A1, :OM, :ECC, :PBDOT, :XDOT, :OMDOT, :M2, :MTOT, :GAMMA, :I, :IDOT),
         desired_refinement_level = 0,
         parallel = true,
-        DiffContourUnit(:chi2_marginalized, from_min=true, diffs=[1.0], contours=[lvl_2sigma], nan_default=Inf),
+        DiffContourUnit(:chi2_marginalized, from_min=true, diffs=[1.0], contours=[lvl_3sigma], nan_default=Inf),
         LocalMinimaUnit(:chi2_marginalized, from_min=true, max=20.0, max_diff = 0.1, nan_default=Inf)
     ),
     opts = GridWorkspaceOptions(
-        grid_root = "GRID_TEST"
+        grid_root = "MPA1_GRID"
     ),
 )
 
-# 
-
 # jldsave("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST/grid_result.jld2"; grid_result = grid_result)
 # grid_result = load("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST/grid_result.jld2", "grid_result")
+# grid_result = load(joinpath(base_path, "grid_result_iter2.jld2"), "grid_result")
 
+base_path = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/MPA1_GRID"
 
 grid_result = run_task(grid_task)
+jldsave(joinpath(base_path, "grid_result_iter0.jld2"); grid_result = grid_result)
 plot_chi2_contours(grid_result)
 
-for i in 1:3
+for i in 1:4
     grid_result = run_task(grid_task; grid_init = grid_result, just_refine = true)
+    jldsave(joinpath(base_path, "grid_result_iter$(i).jld2"); grid_result = grid_result)
     plot_chi2_contours(grid_result)
 end
 
