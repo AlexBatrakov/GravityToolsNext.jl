@@ -1,0 +1,29 @@
+name: Docs
+
+on:
+  push:
+    tags:    [ "v*" ]        # соберёт stable при релиз-тегах    branches: [ "main" ]     # пом
+  pull_request:
+
+permissions:
+  contents: write            # нужно, чтобы пушить в gh-pages
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - uses: julia-actions/cache@v2
+
+      - name: Instantiate docs env
+        run: julia --project=docs -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+
+      - name: Build & deploy docs
+        env:
+          CI: "true"
+        run: julia --project=docs docs/make.jl          # DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}  # для           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # д
