@@ -100,6 +100,37 @@ function Base.show(io::IO, ::MIME"text/plain", e::PriorExecutionOptions)
     println(io, spad, "value_sig:         ", e.value_sig)
 end
 
+"""
+    copy_with(e::PriorExecutionOptions; kwargs...) -> PriorExecutionOptions
+
+Return a copy of `e` with any provided keyword overrides applied. Valid keys:
+- `mode`, `chain_direction`, `chain_snapshot_par`
+- `scheduler`, `max_workers`
+- `workdir_layout`, `node_dir_prefix`, `keep_node_dirs`
+- `on_error`
+- `dir_name_mode`, `index_pad`, `value_sig`
+"""
+function copy_with(e::PriorExecutionOptions; kwargs...)
+    mode              = get(kwargs, :mode,              e.mode)
+    chain_direction   = get(kwargs, :chain_direction,   e.chain_direction)
+    chain_snapshot_par= get(kwargs, :chain_snapshot_par,e.chain_snapshot_par)
+    scheduler         = get(kwargs, :scheduler,         e.scheduler)
+    max_workers       = get(kwargs, :max_workers,       e.max_workers)
+    workdir_layout    = get(kwargs, :workdir_layout,    e.workdir_layout)
+    node_dir_prefix   = get(kwargs, :node_dir_prefix,   e.node_dir_prefix)
+    keep_node_dirs    = get(kwargs, :keep_node_dirs,    e.keep_node_dirs)
+    on_error          = get(kwargs, :on_error,          e.on_error)
+    dir_name_mode     = get(kwargs, :dir_name_mode,     e.dir_name_mode)
+    index_pad         = get(kwargs, :index_pad,         e.index_pad)
+    value_sig         = get(kwargs, :value_sig,         e.value_sig)
+
+    return PriorExecutionOptions(; mode, chain_direction, chain_snapshot_par,
+        scheduler, max_workers, workdir_layout, node_dir_prefix, keep_node_dirs,
+        on_error, dir_name_mode, index_pad, value_sig)
+end
+
+Base.copy(e::PriorExecutionOptions) = copy_with(e)
+
 # --------------------------------------------------------------------------------------------------------------
 # Naming & metadata helpers
 # --------------------------------------------------------------------------------------------------------------
@@ -173,6 +204,64 @@ function write_node_metadata(path::AbstractString; meta...)
 end
 
 # --------------------------------------------------------------------------------------------------------------
+# Per-node seed specification (starting par-files for prior nodes)
+# --------------------------------------------------------------------------------------------------------------
+
+abstract type AbstractNodeSeedSpec end
+
+"""
+    NoSeeds()
+
+Disable per-node seeding (default).
+"""
+struct NoSeeds <: AbstractNodeSeedSpec end
+
+"""
+    SeedPaths(paths::Vector{String})
+
+Explicit per-node par-file paths mapped by **node index**. The length must
+match the number of nodes produced by the `nodes` rule.
+"""
+struct SeedPaths <: AbstractNodeSeedSpec
+    paths::Vector{String}
+end
+
+# Pretty printer for SeedPaths
+function Base.show(io::IO, ::MIME"text/plain", s::SeedPaths)
+    indent = get(io, :indent, 0)
+    pad, spad = repeat(" ", indent), repeat(" ", indent + 2)
+    n = length(s.paths)
+    println(io, pad, "SeedPaths")
+    println(io, spad, "count: ", n)
+    # Preview a few paths for convenience
+    preview = min(n, 5)
+    for i in 1:preview
+        println(io, spad, lpad(string(i), 3), ": ", s.paths[i])
+    end
+    if n > preview
+        println(io, spad, "… (", n - preview, " more)")
+    end
+end
+
+"""
+    SeedPaths(res::GeneralTempoResult) -> SeedPaths
+
+Convenience: extract per-node `par_out_path` from a prior run's result and build
+`SeedPaths` in the same order as `res.subresults`.
+"""
+function SeedPaths(res::GeneralTempoResult)
+    n = length(res.subresults)
+    n == 0 && error("SeedPaths(result): result has no subresults")
+    paths = Vector{String}(undef, n)
+    for (i, r) in enumerate(res.subresults)
+        p = get(r.metadata, :par_out_path, nothing)
+        p isa AbstractString || error("SeedPaths(result): subresult $i has no :par_out_path in metadata")
+        paths[i] = String(p)
+    end
+    return SeedPaths(paths)
+end
+
+# --------------------------------------------------------------------------------------------------------------
 # Settings that fully describe a prior-marginalized single-task
 # --------------------------------------------------------------------------------------------------------------
 
@@ -211,6 +300,7 @@ Fields
 - `save_node_results`  : whether to keep `subresults` (per-node `GeneralTempoResult`)
 - `exec_options`       : execution policy (chaining, scheduler, dirs, error handling, naming)
 - `metrics_hook`       : optional callback to extend the metrics dictionary
+- `seed_spec`          : per-node seed specification (par-file inputs for nodes)
 
 Notes
 - `metrics_hook` is expected to have signature like:
@@ -232,6 +322,7 @@ struct PriorMarginalizationSettings{P<:AbstractPriorSpec, N<:AbstractNodeRule}
 
     exec_options::PriorExecutionOptions
     metrics_hook::Union{Nothing,Function}
+    seed_spec::AbstractNodeSeedSpec
 
     function PriorMarginalizationSettings(;
         parameter::Symbol,
@@ -245,6 +336,7 @@ struct PriorMarginalizationSettings{P<:AbstractPriorSpec, N<:AbstractNodeRule}
         save_node_results::Bool   = true,
         exec_options::PriorExecutionOptions = PriorExecutionOptions(),
         metrics_hook::Union{Nothing,Function} = nothing,
+        seed_spec::AbstractNodeSeedSpec = NoSeeds(),
     ) where {P<:AbstractPriorSpec, N<:AbstractNodeRule}
 
         validate_choice("pin_mode",       pin_mode,       _PIN_MODES)
@@ -282,9 +374,11 @@ struct PriorMarginalizationSettings{P<:AbstractPriorSpec, N<:AbstractNodeRule}
             save_node_results,
             exec_options,
             metrics_hook,
+            seed_spec,
         )
     end
 end
+
 
 # Pretty-print with indentation (compact, avoids recomputing nodes)
 function Base.show(io::IO, ::MIME"text/plain", s::PriorMarginalizationSettings)
@@ -316,7 +410,66 @@ function Base.show(io::IO, ::MIME"text/plain", s::PriorMarginalizationSettings)
     if s.metrics_hook !== nothing
         println(io, spad, "metrics_hook:       provided")
     end
+
+    println(io, spad, "seeds:")
+    if s.seed_spec isa NoSeeds
+        println(io, repeat(" ", indent + 4), "none")
+    elseif s.seed_spec isa SeedPaths
+        println(io, repeat(" ", indent + 4), "paths (", length((s.seed_spec::SeedPaths).paths), ")")
+    else
+        println(io, repeat(" ", indent + 4), string(typeof(s.seed_spec)))
+    end
 end
+
+"""
+    copy_with(s::PriorMarginalizationSettings; kwargs...) -> PriorMarginalizationSettings
+
+Create a modified copy of `s`, overriding any subset of fields via keyword arguments.
+All validations are performed by the regular constructor.
+
+Keyword arguments mirror the settings fields:
+- `parameter`, `pin_mode`, `prior`, `nodes`
+- `likelihood_source`, `ref_strategy`, `ref_value`
+- `representative`, `save_node_results`
+- `exec_options`, `metrics_hook`, `seed_spec`
+"""
+function copy_with(s::PriorMarginalizationSettings; kwargs...)
+    # pull values with defaults from `s`
+    p_parameter        = get(kwargs, :parameter,        s.parameter)
+    p_pin_mode         = get(kwargs, :pin_mode,         s.pin_mode)
+    p_prior            = get(kwargs, :prior,            s.prior)
+    p_nodes            = get(kwargs, :nodes,            s.nodes)
+    p_like_src         = get(kwargs, :likelihood_source, s.likelihood_source)
+    p_ref_strategy     = get(kwargs, :ref_strategy,     s.ref_strategy)
+    p_ref_value        = get(kwargs, :ref_value,        s.ref_value)
+    p_representative   = get(kwargs, :representative,   s.representative)
+    p_save_nodes       = get(kwargs, :save_node_results, s.save_node_results)
+    p_exec_opts        = get(kwargs, :exec_options,     s.exec_options)
+    p_metrics_hook     = get(kwargs, :metrics_hook,     s.metrics_hook)
+    p_seed_spec        = get(kwargs, :seed_spec,        s.seed_spec)
+
+    return PriorMarginalizationSettings(
+        parameter        = p_parameter,
+        pin_mode         = p_pin_mode,
+        prior            = p_prior,
+        nodes            = p_nodes,
+        likelihood_source= p_like_src,
+        ref_strategy     = p_ref_strategy,
+        ref_value        = p_ref_value,
+        representative   = p_representative,
+        save_node_results= p_save_nodes,
+        exec_options     = p_exec_opts,
+        metrics_hook     = p_metrics_hook,
+        seed_spec        = p_seed_spec,
+    )
+end
+
+"""
+    Base.copy(s::PriorMarginalizationSettings)
+
+Return an identical copy of `s`.
+"""
+Base.copy(s::PriorMarginalizationSettings) = copy_with(s)
 
 # Pick a reference θ that depends only on the prior (no node info required).
 # Supported here: :prior_median, :custom_value
@@ -331,5 +484,28 @@ function _ref_theta_prior_only(s::PriorMarginalizationSettings)::Float64
         return prior_median(pr)
     else
         error("ref_strategy=$(s.ref_strategy) is not a prior-only choice")
+    end
+end
+
+"""
+    resolve_node_seed_paths(settings, thetas) -> Vector{Union{Nothing,String}}
+
+Materialize `settings.seed_spec` into a per-node list of par paths (or `nothing`).
+For `NoSeeds()` returns a vector of `nothing`s. For `SeedPaths`, validates length.
+"""
+
+function resolve_node_seed_paths(s::PriorMarginalizationSettings,
+                                 thetas::Vector{Float64})::Vector{Union{Nothing,String}}
+    N = length(thetas)
+    spec = getfield(s, :seed_spec)
+    if spec isa NoSeeds
+        return fill(nothing, N)
+    elseif spec isa SeedPaths
+        paths = (spec::SeedPaths).paths
+        length(paths) == N || error("SeedPaths: expected $N paths, got $(length(paths))")
+        # return a fresh copy of strings to avoid accidental mutation
+        return String.(paths)
+    else
+        error("Unknown seed spec $(typeof(spec))")
     end
 end

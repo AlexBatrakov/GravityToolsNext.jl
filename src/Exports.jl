@@ -202,7 +202,7 @@ export AbstractNodeRule, ClenshawCurtisNodes, QuantileNodes, ExplicitThetaNodes,
 # TempoFramework / Prior / PriorSettings.jl
 # ------------------------------------------------------------------------------------------
 export PriorExecutionOptions, PriorMarginalizationSettings, tempo_flag, build_node_dirname, write_node_metadata
-
+export AbstractNodeSeedSpec, NoSeeds, SeedPaths
 
 # ------------------------------------------------------------------------------------------------------------
 # TempoFramework / SingleTasks

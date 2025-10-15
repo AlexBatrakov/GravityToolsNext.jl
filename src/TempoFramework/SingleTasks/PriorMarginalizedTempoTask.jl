@@ -323,6 +323,9 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
     n        = length(thetas)
     out      = Vector{_PriorNodeResult}(undef, n)
 
+    # Resolve per-node par seeds (may be all `nothing` if NoSeeds)
+    seed_paths = resolve_node_seed_paths(s, thetas)
+
     # on_error policy and early stop flag
     on_error = task.settings.exec_options.on_error
     stopped_early = false
@@ -337,12 +340,20 @@ function _run_nodes_serial!(task::PriorMarginalizedTempoTask,
         θ = thetas[i]
         node_task, node_tag, node_dir, _ = _make_node_task(task.base_task, s, i, θ, i == idxs[1])
 
-        # chaining: pass previous node's final par as input
+        # chaining: pass previous node's final par as input (if enabled)
         if s.exec_options.mode === :chained && prev_par_rel !== nothing
             node_task = task_copy_with(node_task;
                 par_input    = prev_par_rel,
                 snapshot_par = s.exec_options.chain_snapshot_par ? true : nothing,
             )
+        end
+
+        # apply per-node seed if provided (overrides par_input for this node)
+        sp = seed_paths[i]
+        if sp !== nothing
+            # Prefer a path relative to the job root (base_dir) for portability
+            sp_rel = isabspath(sp) ? relpath(sp, base_dir) : sp
+            node_task = task_copy_with(node_task; par_input = sp_rel, snapshot_par = false)
         end
 
         res = run_task(node_task)

@@ -26,7 +26,7 @@ basic_settings = TempoRunSettings(
     white_noise_enabled = true,
     white_noise_scope = :all,                     # :final, :all
     work_mode = :jobdir,                          # :inplace, :jobdir
-    job_name = "TEST",                            # nothing, "TEST"
+    job_name = "MPA1_GR",                            # nothing, "TEST"
     overwrite = :clean,                           # :error, :reuse, :unique, :clean
     layout = :split,                               # :flat, :split
     temp_dir = nothing,                            # nothing, "nodes/node_1"
@@ -74,7 +74,15 @@ prior_settings = PriorMarginalizationSettings(
 
 prior_task = PriorMarginalizedTempoTask(basic_task, prior_settings)
 
-# result = run_task(prior_task)
+# prior_result = run_task(prior_task)
+# jldsave("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/MPA1_GR/prior_result.jld2"; prior_result = prior_result)
+prior_result = load("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/MPA1_GR/prior_result.jld2", "prior_result")
+
+prior_settings = copy_with(prior_settings; 
+                            seed_spec = SeedPaths(prior_result),
+                            exec_options = copy_with(prior_settings.exec_options; mode = :independent))
+
+prior_task = PriorMarginalizedTempoTask(basic_task, prior_settings)
 
 grid_task = Adaptive2DGridTask(
     base_task = prior_task,
@@ -94,15 +102,16 @@ grid_task = Adaptive2DGridTask(
 
 # jldsave("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST/grid_result.jld2"; grid_result = grid_result)
 # grid_result = load("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST/grid_result.jld2", "grid_result")
-# grid_result = load(joinpath(base_path, "grid_result_iter2.jld2"), "grid_result")
 
 base_path = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/MPA1_GRID"
+# grid_result = load(joinpath(base_path, "grid_result_iter2.jld2"), "grid_result")
+
 
 grid_result = run_task(grid_task)
 jldsave(joinpath(base_path, "grid_result_iter0.jld2"); grid_result = grid_result)
 plot_chi2_contours(grid_result)
 
-for i in 1:4
+for i in 3:3
     grid_result = run_task(grid_task; grid_init = grid_result, just_refine = true)
     jldsave(joinpath(base_path, "grid_result_iter$(i).jld2"); grid_result = grid_result)
     plot_chi2_contours(grid_result)
