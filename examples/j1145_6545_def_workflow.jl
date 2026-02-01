@@ -104,7 +104,7 @@ grid_task = Adaptive2DGridTask(
 # grid_result = load("/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/FAKE_TEST/grid_result.jld2", "grid_result")
 
 base_path = "/Users/abatrakov/Documents/Work/PhD/projects/J1141-6545/final_thesis/DDSTG_DEF/MPA1_GRID"
-# grid_result = load(joinpath(base_path, "grid_result_iter2.jld2"), "grid_result")
+# grid_result = load(joinpath(base_path, "grid_result_iter3.jld2"), "grid_result")
 
 
 grid_result = run_task(grid_task)

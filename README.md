@@ -38,6 +38,18 @@ validate(s)
 # result = run_tempo_parsed(s)
 ```
 
+## Examples
+
+End-to-end usage scripts live in [examples/](examples/). Many of them require an installed TEMPO/TEMPO2 and appropriate environment variables (e.g. `TEMPO2`, `TEMPO2_CMD`) pointing to the data directory / executable.
+
+## Testing
+
+Unit tests focus on pure-Julia components (for example `AdaptiveGridFramework`) and do **not** require TEMPO/TEMPO2.
+
+```sh
+julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
 ## Documentation
 - Dev: https://alexbatrakov.github.io/GravityToolsNext.jl/dev/
 - Stable: https://alexbatrakov.github.io/GravityToolsNext.jl/stable/
