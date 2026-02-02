@@ -10,8 +10,8 @@ permissions:
   contents: write                # нужно, чтобы пушить в gh-pages
 
 concurrency:
-  group: docs-${{ github.ref }}
-  cancel-in-progress: true
+  group: docs-gh-pages
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:

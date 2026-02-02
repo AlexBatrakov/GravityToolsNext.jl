@@ -45,4 +45,5 @@ makedocs(
 deploydocs(
     repo = "github.com/AlexBatrakov/GravityToolsNext.jl.git",
     devbranch = "main",
+    forcepush = true,
 )

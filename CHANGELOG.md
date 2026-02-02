@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.1.3 - 2026-02-02
+- Docs CI: serialize deployments to `gh-pages` and enable `forcepush` to avoid non-fast-forward push failures.
+
 ## v0.1.2 - 2026-02-02
 - CI: add GitHub Actions workflow to run `Pkg.test()` on Julia 1.10 and latest stable.
 - Tests: convert former manual scripts into `examples/` and add CI-safe unit tests for `AdaptiveGridFramework`.
