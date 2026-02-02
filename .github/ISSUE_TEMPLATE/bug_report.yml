@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a problem or regression
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Minimal reproduction
+      description: Provide a small snippet or steps to reproduce.
+      render: julia
+
+  - type: input
+    attributes:
+      label: Julia version
+      placeholder: e.g. 1.10.10
+
+  - type: input
+    attributes:
+      label: GravityToolsNext version
+      placeholder: e.g. 0.1.0
+
+  - type: textarea
+    attributes:
+      label: Logs / stacktrace
+      render: text
+
+  - type: checkboxes
+    attributes:
+      label: Environment
+      options:
+        - label: This issue requires TEMPO/TEMPO2 to reproduce
+          required: false

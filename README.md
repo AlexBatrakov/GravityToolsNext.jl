@@ -2,6 +2,7 @@
 
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://alexbatrakov.github.io/GravityToolsNext.jl/dev/)
 [![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://alexbatrakov.github.io/GravityToolsNext.jl/stable/)
+[![CI](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Modern Julia tooling for orchestrating TEMPO/TEMPO2 runs with reproducible job layouts, robust path handling, and convenient analysis hooks.
@@ -40,7 +41,7 @@ validate(s)
 
 ## Examples
 
-End-to-end usage scripts live in [examples/](examples/). Many of them require an installed TEMPO/TEMPO2 and appropriate environment variables (e.g. `TEMPO2`, `TEMPO2_CMD`) pointing to the data directory / executable.
+End-to-end usage scripts (sandbox / manual runs) live in [examples/](examples/). Many of them require installed TEMPO/TEMPO2 and appropriate environment variables (e.g. `TEMPO2`, `TEMPO2_CMD`) pointing to the data directory / executable.
 
 ## Testing
 
