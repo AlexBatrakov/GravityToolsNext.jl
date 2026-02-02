@@ -7,6 +7,12 @@
 
 Modern Julia tooling for orchestrating TEMPO/TEMPO2 runs with reproducible job layouts, robust path handling, and convenient analysis hooks.
 
+At a high level, this package aims to turn “a TEMPO2 run on my laptop” into a repeatable, inspectable, scriptable workflow:
+- deterministic job directory layouts (easy to diff, archive, and share)
+- explicit run settings (inputs, overrides, output policies)
+- structured parsing of outputs into Julia-friendly objects
+- higher-level task abstractions (single runs, priors/nodes, adaptive grids)
+
 Typical use-cases:
 - Reproducible TEMPO/TEMPO2 batch runs with clean job directories
 - Parameter sweeps / adaptive grids around expensive likelihood surfaces
@@ -18,6 +24,28 @@ Typical use-cases:
 - Optional manifests and cleanup policies
 - White-noise analysis toggles and scope control
 - Extensible task layer for parameter sweeps and adaptive grids
+
+## What’s inside
+
+The codebase is split into two major parts:
+
+- **TempoFramework** (external dependency at execution time)
+	- `TempoRunSettings` and related option structs define *what* to run and *how* to lay out files.
+	- `run_tempo_raw` / `run_tempo_parsed` execute the external binary and parse outputs.
+	- Task layer (`BasicTempoTask`, `PriorMarginalizedTempoTask`, `Adaptive2DGridTask`) composes workflows.
+
+- **AdaptiveGridFramework** (pure Julia)
+	- `GridAxis` + grid rules (`LinRule`, `LogRule`, `ExplicitRule`) define parameter grids.
+	- `RefinementSettings` + refinement units decide where refinement happens.
+	- `AdaptiveRefinement2DGrid` performs solver-agnostic grid evaluation/refinement.
+
+This split is intentional: **unit tests and CI cover the pure-Julia pieces**, while end-to-end task runs require a local TEMPO/TEMPO2 installation.
+
+## Mental model
+
+- If you want to **run TEMPO/TEMPO2 reproducibly**, start from `TempoRunSettings` → create a task (e.g. `BasicTempoTask`) → `run_task`.
+- If you want to **build and refine grids without any external binaries**, start from `GridAxis` + `RefinementSettings` → `AdaptiveRefinement2DGrid`.
+- If you want to **do parameter exploration**, use the task layer (priors/nodes, adaptive grids) to compose many runs.
 
 ## Installation
 
@@ -59,6 +87,8 @@ precalculate_2DGrid!(grid, target, _ -> nothing)
 
 End-to-end task execution requires installed TEMPO/TEMPO2 binaries and data directories.
 For `Tempo2()`, make sure `TEMPO2` is set (data dir). Optionally set `TEMPO2_CMD` to the executable.
+
+If you only plan to use the pure-Julia parts (like `AdaptiveGridFramework`), you don’t need any TEMPO/TEMPO2 setup.
 
 ```julia
 using GravityToolsNext
