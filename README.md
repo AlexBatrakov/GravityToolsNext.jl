@@ -1,8 +1,8 @@
 # GravityToolsNext.jl
 
+[![CI](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml)
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://alexbatrakov.github.io/GravityToolsNext.jl/dev/)
 [![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://alexbatrakov.github.io/GravityToolsNext.jl/stable/)
-[![CI](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexBatrakov/GravityToolsNext.jl/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Modern Julia tooling for orchestrating TEMPO/TEMPO2 runs with reproducible job layouts, robust path handling, and convenient analysis hooks.
