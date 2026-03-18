@@ -15,6 +15,14 @@ gtn_require_docker() {
         echo "docker is required but was not found on PATH" >&2
         exit 1
     }
+
+    docker info >/dev/null 2>&1 || {
+        cat >&2 <<EOF
+docker is installed but the daemon is not reachable.
+Start Docker Desktop or restore access to the Docker socket, then try again.
+EOF
+        exit 1
+    }
 }
 
 gtn_require_image() {

@@ -121,6 +121,14 @@ CI runs this unit-test subset on clean machines.
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
+## Development Baseline
+
+The supported REPL-oriented development workflow uses the repository-local
+Docker baseline in [docker/dev/README.md](docker/dev/README.md). That guide
+records the validated first-run bootstrap order, the helper scripts for shell /
+Julia REPL / tests / DDSTG smoke validation, and the current
+`Manifest.toml` policy for contributors working on the `linux/arm64` baseline.
+
 ## Documentation
 - Dev: https://alexbatrakov.github.io/GravityToolsNext.jl/dev/
 - Stable: https://alexbatrakov.github.io/GravityToolsNext.jl/stable/

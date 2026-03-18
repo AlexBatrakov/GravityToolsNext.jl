@@ -24,10 +24,10 @@ This file tracks the project-facing plan for `GravityToolsNext.jl`.
 
 ## Phase 3: Establish The Daily Workflow
 
-- [ ] Document the standard commands for entering the container shell.
-- [ ] Document the standard commands for starting Julia in the project environment.
-- [ ] Document the standard commands for running tests and example scripts.
-- [ ] Keep the workflow convenient for interactive REPL-based development.
+- [x] Document the standard commands for entering the container shell.
+- [x] Document the standard commands for starting Julia in the project environment.
+- [x] Document the standard commands for running tests and example scripts.
+- [x] Keep the workflow convenient for interactive REPL-based development.
 
 ## Phase 4: Audit The Package
 
