@@ -52,9 +52,11 @@ The Dockerfile performs two build-time sanity checks:
 This baseline has been validated against `Julia 1.12.4` with:
 
 - a clean `Pkg.instantiate()` from `Project.toml` in a fresh container/depot
-- `Pkg.test()` passing (`22 / 22`)
+- the expanded default `Pkg.test()` suite passing
 - direct `julia --project=.` package loading
 - DDSTG `Tempo()` / `Tempo2()` validation plus one real `Tempo2` smoke run
+- the opt-in gated `Tempo2` integration smoke layer passing under
+  `GTN_ENABLE_TEMPO2_INTEGRATION=1`
 
 No `Project.toml` or package-source changes were required for `Julia 1.12.4`.
 The clean resolve selected newer dependency versions within the existing compat
@@ -137,6 +139,14 @@ docker rm -f gravitytoolsnext-dev
 - `scripts/smoke-run.sh`
   - run `Pkg.instantiate()` and then a small DDSTG-aware `Tempo2` smoke
     validation against the repo-local synthetic fixture
+
+The repository test suite also contains a small gated real-binary `Tempo2`
+smoke layer. It stays skipped by default and can be enabled explicitly in a
+prepared environment with:
+
+```bash
+GTN_ENABLE_TEMPO2_INTEGRATION=1 julia --project=. -e 'using Pkg; Pkg.test()'
+```
 
 After the first bootstrap, the normal day-to-day loop can be any mix of:
 

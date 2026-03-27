@@ -38,10 +38,10 @@ This file tracks the project-facing plan for `GravityToolsNext.jl`.
 
 ## Phase 5: Expand Test Coverage
 
-- [ ] Expand pure-Julia unit test coverage.
-- [ ] Add parser tests for `tempo` / `tempo2` output handling.
-- [ ] Add tests for settings, materialization, and workspace layout behavior.
-- [ ] Add gated integration tests for environments where `tempo` / `tempo2` are available.
+- [x] Expand pure-Julia unit test coverage.
+- [x] Add parser tests for `tempo` / `tempo2` output handling.
+- [x] Add tests for settings, materialization, and workspace layout behavior.
+- [x] Add gated integration tests for environments where `tempo` / `tempo2` are available.
 
 ## Phase 6: Improve Reliability And Maintainability
 

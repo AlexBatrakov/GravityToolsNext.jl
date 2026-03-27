@@ -39,7 +39,9 @@ The codebase is split into two major parts:
 	- `RefinementSettings` + refinement units decide where refinement happens.
 	- `AdaptiveRefinement2DGrid` performs solver-agnostic grid evaluation/refinement.
 
-This split is intentional: **unit tests and CI cover the pure-Julia pieces**, while end-to-end task runs require a local TEMPO/TEMPO2 installation.
+This split is intentional: the default test suite stays usable without local
+TEMPO/TEMPO2 binaries, while a small opt-in gated smoke layer can validate the
+supported real-binary `Tempo2` path when that environment is available.
 
 ## Mental model
 
@@ -113,12 +115,26 @@ End-to-end usage scripts (sandbox / manual runs) live in [examples/](examples/).
 
 ## Testing
 
-Unit tests focus on pure-Julia components (for example `AdaptiveGridFramework`) and do **not** require TEMPO/TEMPO2.
+The default `Pkg.test()` suite covers:
 
-CI runs this unit-test subset on clean machines.
+- pure-Julia grid logic
+- wrapper/task contract tests
+- `TempoCore` settings, materialization, parser, and result assembly on saved
+  or synthetic fixtures
+- gated integration checks that skip cleanly unless explicitly enabled
+
+CI and ordinary local development use the default suite and do **not** require
+TEMPO/TEMPO2 binaries.
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
+To opt into the supported real-binary `Tempo2` smoke checks in a prepared
+environment:
+
+```sh
+GTN_ENABLE_TEMPO2_INTEGRATION=1 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
 ## Development Baseline

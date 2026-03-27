@@ -45,7 +45,16 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
+Opt-in real-binary `Tempo2` smoke coverage is available in prepared
+environments:
+
+```sh
+GTN_ENABLE_TEMPO2_INTEGRATION=1 julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
 ## Notes about TEMPO/TEMPO2
 
 This package can orchestrate external TEMPO/TEMPO2 runs. CI intentionally runs only unit tests that do not require external binaries.
-If you add integration tests that require TEMPO/TEMPO2, gate them behind environment checks (so they are skipped on CI).
+If you add integration tests that require TEMPO/TEMPO2, keep them behind
+explicit environment checks so they skip cleanly on CI and on ordinary local
+development machines.
