@@ -9,8 +9,18 @@
 """
     PriorMarginalizedTempoTask{T,P,N} <: SingleTempoTask
 
-A task wrapper that evaluates a base single-tempo task over a grid of prior values `θ`
-and aggregates node results into one posterior-aware result.
+A task wrapper that evaluates a base single-tempo task over a grid of prior
+values `θ` and aggregates node results into one posterior-aware result.
+
+The wrapped base task is expected to implement the supported single-task
+extension hooks used by wrappers:
+- `run_task`
+- `task_workdir`
+- `task_copy_with`
+- `task_derive_par_output`
+
+At present, prior-node execution is implemented for `scheduler = :serial`.
+The `:distributed` scheduler keyword is reserved for future work.
 
 Type parameters
 - `T` — a concrete `SingleTempoTask` (e.g. `BasicTempoTask`)

@@ -1,7 +1,7 @@
 # src/TempoFramework/MultiPointTasks/Adaptive2DGridTask.jl
 # ----------------------------------------------------------------------------
 # Adaptive2DGridTask
-# A thin adapter that runs an arbitrary SingleTempoTask on an adaptive 2D grid.
+# A thin adapter that runs a supported SingleTempoTask on an adaptive 2D grid.
 # It wires your grid engine (AdaptiveRefinement2DGrid) to a `target_function`
 # that:
 #   • clones the base SingleTempoTask for a point (x, y) via `task_copy_with`,
@@ -11,8 +11,9 @@
 # Notes
 # -----
 # * We keep isolation per grid point by running each point in its own job directory (`work_mode=:jobdir`, distinct `job_name`) and using a per-point par_output stem ...
-# * We do not assume any particular SingleTempoTask internals beyond the public
-#   helpers (task_copy_with, task_derive_par_output) and GeneralTempoResult API.
+# * Supported base tasks must implement the public wrapper hooks
+#   `task_copy_with` and `task_derive_par_output`.
+# * Per-point result persistence uses the optional `save_result_jld2` hook.
 # ----------------------------------------------------------------------------
 
 
@@ -63,13 +64,20 @@ end
 """
     Adaptive2DGridTask(; base_task, x, y, ref_settings, opts=GridWorkspaceOptions())
 
-Run a `SingleTempoTask` over an adaptively refined 2D grid defined by axes `x` and `y`.
+    Run a supported `SingleTempoTask` over an adaptively refined 2D grid
+    defined by axes `x` and `y`.
 
 Arguments
 - `base_task::SingleTempoTask`             : The task to clone and execute at each grid point.
 - `x::GridAxis`, `y::GridAxis`             : Grid axes (linear/log/explicit rules supported).
 - `ref_settings::RefinementSettings`       : Refinement engine configuration (units and parameters to save).
 - `opts::GridWorkspaceOptions`             : Workspace layout, tagging, and persistence options.
+
+Supported base-task contract
+- `task_copy_with(base_task; kwargs...)`
+- `task_derive_par_output(base_task, tag)`
+- `run_task(base_task_copy) -> GeneralTempoResult`
+- `save_result_jld2(result; filename=...)` when `opts.save_results_jld2 == true`
 
 Behavior
 - Each grid point is run in its own job directory (under `opts.grid_root`) with a unique `job_name` and `par_output` stem.
@@ -158,11 +166,6 @@ function _maybe_save_result(res::GeneralTempoResult, tag::AbstractString, root_d
     opts.save_results_jld2 || return
     mkpath(_grid_results_dir(root_dir, opts))
     save_result_jld2(res; filename = _grid_point_result_path(root_dir, opts, tag))
-end
-
-function _save_grid_result(grid::AdaptiveRefinement2DGrid)
-    jldsave(filename; grid=grid)
-    return nothing
 end
 
 # -- Execution ----------------------------------------------------------------

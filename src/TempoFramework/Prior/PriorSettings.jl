@@ -27,11 +27,11 @@ Fields
 - `mode`              : node chaining policy (`:independent` | `:chained`)
 - `chain_direction`   : traversal order when chaining (`:forward` | `:backward`)
 - `chain_snapshot_par`: force snapshot of per-node input par when chaining (true/false)
-- `scheduler`         : how to schedule nodes (`:serial` | `:distributed`)
-- `max_workers`       : cap for distributed workers (ignored for `:serial`; `0` means "all available")
+- `scheduler`         : scheduling policy (`:serial` supported now; `:distributed` reserved for future implementation)
+- `max_workers`       : cap for distributed workers (currently only meaningful once a distributed scheduler exists)
 - `workdir_layout`    : directory layout policy (currently only `:per_node`)
 - `node_dir_prefix`   : subdirectory prefix under the base task's work dir (e.g. `"nodes/node_"`)
-- `keep_node_dirs`    : keep (true) or delete (false) per-node directories after run
+- `keep_node_dirs`    : advisory retention flag; automatic node-directory cleanup is not implemented yet
 - `on_error`          : error handling (`:stop` | `:skip` | `:collect`)
 
 Directory naming:

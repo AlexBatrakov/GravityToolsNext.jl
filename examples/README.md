@@ -1,8 +1,11 @@
 # Examples
 
-This directory contains end-to-end usage scripts that were originally used for manual testing.
+This directory contains lightweight supported examples for the current public
+package surface.
 
 Notes:
-- Many scripts require external TEMPO/TEMPO2 binaries and data directories.
-- Scripts may contain machine-specific absolute paths; treat them as templates.
-- For CI-friendly unit tests (no TEMPO/TEMPO2 required), see the package test suite under `test/`.
+- Examples are repo-local and avoid machine-specific paths.
+- TEMPO/TEMPO2-backed examples are intentionally construction-first; uncomment
+  the actual `run_task(...)` lines only when local binaries and runtime data are available.
+- Heavy private research drivers were moved to `.project-local/research-scripts/2026-03-27_supported-surface-cleanup/`.
+- For CI-friendly unit tests, see the package test suite under `test/`.

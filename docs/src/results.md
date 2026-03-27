@@ -140,8 +140,8 @@ You can build your own criteria by combining `res.metrics` and `res.convergence`
 
 ## Working with nested results
 
-Tasks that execute multiple jobs (prior marginalization, adaptive grid) return a parent `GeneralTempoResult`
-with `res.subresults::Vector{GeneralTempoResult}` and a tag `res.subresult_type` (e.g., `:node` or `:grid`).
+`PriorMarginalizedTempoTask` returns a parent `GeneralTempoResult` with node
+results stored in `res.subresults` and tagged by `res.subresult_type`.
 Traverse or aggregate using the same fields and helpers described above:
 ```julia
 parent = res
@@ -149,6 +149,10 @@ for child in parent.subresults
     @info "child wrms" result_metric(child, :wrms_fit)
 end
 ```
+
+`Adaptive2DGridTask` returns an `AdaptiveRefinement2DGrid`, not a parent
+`GeneralTempoResult`. Grid point persistence, when enabled, is handled via
+per-point JLD2 files.
 
 ## Troubleshooting
 

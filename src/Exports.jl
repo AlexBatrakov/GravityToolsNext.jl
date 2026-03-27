@@ -56,7 +56,7 @@ export AbstractTempoVersion,
        tempo_cmd_path,
        tempo_cmd,
        tempo_env,
-       validate
+       validate,
        get_tempo_command
 
 # ------------------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ export BasicTempoOutput,
        TempoOutputError,
        InternalIterationOutput,
        iserror,
-       parse_tempo_output
+       parse_tempo_output,
        parse_internal_iteration_tempo_output,
        parse_basic_tempo_output,
        parse_fit_parameters,
@@ -151,8 +151,7 @@ export BasicResidualStats,
 export WhiteNoiseBackendFitResult,
        WhiteNoiseFitResult,
        estimate_white_noise_ad_with_offset,
-       build_white_noise_fit,
-       print_backend_table
+       build_white_noise_fit
 
 # ------------------------------------------------------------------------
 # TempoFramework / TempoCore / Result / WhiteNoiseDiagnostics.jl
@@ -172,13 +171,14 @@ export InternalIterationResult,
 export GeneralTempoResult,
        build_general_tempo_result,
        result_metric,
-       has_converged
+       is_converged
 
 # ------------------------------------------------------------------------------------------
 # TempoFramework / TempoCore / TempoTasks.jl
 # ------------------------------------------------------------------------------------------
 export AbstractTempoTask, SingleTempoTask, MultiPointTask
 export run_task, task_workdir, task_with_overrides, task_with_param, task_stage_inputs!
+export task_copy_with, task_derive_par_output, save_result_jld2
 
 # ------------------------------------------------------------------------------------------------------------
 # TempoFramework / Prior

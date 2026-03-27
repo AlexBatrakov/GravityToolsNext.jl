@@ -1,6 +1,7 @@
 # Settings
 
-This page documents the core configuration types used to run TEMPO/TEMPO2.
+This page documents the core configuration types used to run the currently
+supported TEMPO2-centered workflow.
 
 ## RunPaths
 
@@ -15,7 +16,10 @@ Use `default_par_output(par_input)` to derive a default out name.
 ## EngineOptions
 
 Low-level engine configuration:
-- `tempo_version::AbstractTempoVersion` (Tempo() or Tempo2())
+- `tempo_version::AbstractTempoVersion`
+  The active parsed run path is centered on `Tempo2(...)`. `Tempo(...)` remains
+  available as a low-level configuration type, but docs/examples currently treat
+  `Tempo2` as the supported default.
 - `flags::String` (additional CLI flags)
 - `nits::Int` (internal iterations ≥ 1)
 - `gain::Float64` (> 0)
@@ -46,7 +50,9 @@ Runtime/materialization settings:
 - `temp_dir::Union{Nothing,String}`
 - `link_tim::Bool`, `snapshot_par::Bool`
 - Cleanup: `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error`
-- Manifest: `timeout_s`, `write_manifest`, `manifest_style` (`:json` | `:toml`)
+- Deferred/reserved knobs: `timeout_s`, `write_manifest`, `manifest_style`
+  These fields are stored in settings today, but timeout enforcement and
+  manifest emission are not implemented by the runner yet.
 
 ## LoggingOptions
 - `verbosity` (`:silent | :warn | :info | :debug` or `0..3`)
@@ -61,7 +67,7 @@ s = TempoRunSettings(
     par_input  = "a.par",
     tim_input  = "a.tim",
     par_output = default_par_output("a.par"),
-    tempo_version = Tempo2(), nits=2, gain=1.0,
+    tempo_version = Tempo2("/path/to/TEMPO2"), nits=2, gain=1.0,
     white_noise_enabled = false,
     work_mode = :jobdir, layout = :split,
 )

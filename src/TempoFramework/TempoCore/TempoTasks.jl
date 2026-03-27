@@ -80,14 +80,39 @@ function task_stage_inputs!(::SingleTempoTask, ::AbstractString)
     return nothing
 end
 
+"""
+    task_copy_with(task::T; kwargs...) -> T where {T<:SingleTempoTask}
+
+Extension hook used by higher-level wrappers to clone a task while preserving
+its concrete type. Supported wrapper tasks rely on this hook when they need to
+change workspace/layout details or upsert parameter overrides for derived runs.
+"""
+function task_copy_with(task::T; kwargs...)::T where {T<:SingleTempoTask}
+    error("task_copy_with not implemented for $(typeof(task))")
+end
 
 # -----------------------------------------------------------------------------
-# Optional: derive par output filename for a node
+# Extension hook: derive per-node par output filename
 # -----------------------------------------------------------------------------
 
-# Generic fallback: require tasks to implement if different from default
+"""
+    task_derive_par_output(task::SingleTempoTask, node_tag::AbstractString) -> String
+
+Extension hook used by wrapper tasks to derive a stable per-node/par-output
+filename stem from a base task.
+"""
 function task_derive_par_output(t::SingleTempoTask, node_tag::AbstractString)
     error("task_derive_par_output not implemented for $(typeof(t)) — provide a method for your task type")
+end
+
+"""
+    save_result_jld2(result; filename::AbstractString) -> Nothing
+
+Optional persistence hook used by wrappers that save per-node task results. Task
+families that support result persistence should provide a concrete method.
+"""
+function save_result_jld2(result; filename::AbstractString)
+    error("save_result_jld2 not implemented for $(typeof(result))")
 end
 
 # -----------------------------------------------------------------------------
@@ -102,5 +127,4 @@ Entry point for multi-point workflows. Define as needed for your project.
 function run_task(task::MultiPointTask)
     error("run_task not implemented for $(typeof(task))")
 end
-
 

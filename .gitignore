@@ -33,5 +33,8 @@ JuliaLocalPreferences.toml
 # Temporary local repo copies used for clean validation runs
 .codex-tmp/
 
+# macOS Finder metadata
+.DS_Store
+
 # Generated output from the repo-local DDSTG smoke fixture
 test/data/ddstg_smoke/DDSTG_SMOKE/

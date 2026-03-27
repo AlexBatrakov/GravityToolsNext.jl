@@ -1,5 +1,7 @@
 # AbstractTempo.jl
 # Minimal interface and concrete types for Tempo/Tempo2 configuration.
+# The active parsed workflow in GravityToolsNext is currently Tempo2-oriented;
+# `Tempo` remains available as a low-level configuration type.
 
 # --------------------------------------------------------------------------------------------------------------
 # Abstract type and minimal interface
@@ -9,6 +11,8 @@
     AbstractTempoVersion
 
 Abstract base for different TEMPO flavors (Tempo / Tempo2).
+The package's actively exercised parsing/output path is currently centered on
+`Tempo2`; `Tempo` support is presently limited to configuration/command setup.
 Implementations must provide:
 
 - `tempo_data_dir(v) :: String`    — data directory path (TEMPO* env target)

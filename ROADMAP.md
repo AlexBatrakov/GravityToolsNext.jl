@@ -31,10 +31,10 @@ This file tracks the project-facing plan for `GravityToolsNext.jl`.
 
 ## Phase 4: Audit The Package
 
-- [ ] Inventory unfinished or partially implemented features.
-- [ ] Review API consistency across `TempoFramework` and `AdaptiveGridFramework`.
-- [ ] Review task abstractions, settings, and execution flow for cleanup opportunities.
-- [ ] Identify outdated examples and documentation gaps.
+- [x] Inventory unfinished or partially implemented features.
+- [x] Review API consistency across `TempoFramework` and `AdaptiveGridFramework`.
+- [x] Review task abstractions, settings, and execution flow for cleanup opportunities.
+- [x] Identify outdated examples and documentation gaps.
 
 ## Phase 5: Expand Test Coverage
 

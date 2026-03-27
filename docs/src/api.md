@@ -24,6 +24,10 @@ GravityToolsNext.run_tempo_parsed
 GravityToolsNext.BasicTempoTask
 GravityToolsNext.run_task
 GravityToolsNext.task_stage_inputs!
+GravityToolsNext.task_copy_with
+GravityToolsNext.task_derive_par_output
+GravityToolsNext.save_result_jld2
+GravityToolsNext.PriorMarginalizedTempoTask
 ```
 
 ## Adaptive Grid

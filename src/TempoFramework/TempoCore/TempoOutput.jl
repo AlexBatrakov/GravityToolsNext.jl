@@ -1,5 +1,6 @@
 # TempoOutput.jl
-# Parsing of TEMPO2 console output (per-iteration basic stats, fit table, and errors).
+# Parsing of TEMPO2 console output used by the active package surface
+# (per-iteration basic stats, fit table, and errors).
 
 # --------------------------------------------------------------------------------------------------------------
 # Basic structures

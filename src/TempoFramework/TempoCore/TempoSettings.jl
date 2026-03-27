@@ -373,9 +373,9 @@ Cleanup & retention
 - `keep_tmp_on_error::Bool`    : keep `tmp/` if the run failed.
 
 Runtime & manifest
-- `timeout_s::Union{Nothing,Int}` : kill the run after this many seconds (`nothing` = unlimited).
-- `write_manifest::Bool`          : write a small manifest file in the job root.
-- `manifest_style::Symbol`        : `:json` | `:toml`.
+- `timeout_s::Union{Nothing,Int}` : reserved runtime limit stored in settings; timeout enforcement is not implemented yet.
+- `write_manifest::Bool`          : reserved manifest flag; manifest emission is not implemented yet.
+- `manifest_style::Symbol`        : reserved manifest format (`:json` | `:toml`) for future manifest support.
 """
 struct WorkspaceOptions
     # Lifecycle & isolation
@@ -654,7 +654,7 @@ Keyword arguments
   or pass `analysis::WhiteNoiseOptions`
 - Workspace (convenience): `work_mode`, `job_name`, `overwrite` (`:error|:reuse|:unique|:clean`), `layout`, `temp_dir`,
   `link_tim`, `snapshot_par`, `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error`,
-  `timeout_s`, `write_manifest`, `manifest_style`
+  `timeout_s`, `write_manifest`, `manifest_style` (currently stored but not acted on by the runner)
   or pass `workspace::WorkspaceOptions`
 - Logging (convenience): `verbosity`, `with_timestamps`
   or pass `logging::LoggingOptions`

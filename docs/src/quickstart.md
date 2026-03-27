@@ -1,6 +1,7 @@
 # Quickstart
 
-This guide shows how to run a simple TEMPO/TEMPO2 job with GravityToolsNext.jl.
+This guide shows the currently supported minimal run path for a TEMPO2-backed
+job in GravityToolsNext.jl.
 
 ## Installation
 
@@ -19,7 +20,7 @@ s = TempoRunSettings(
     par_input  = "example.par",                # relative to work_dir, must end with .par
     tim_input  = "example.tim",                # relative to work_dir, must end with .tim
     par_output = "example_out.par",            # filename only
-    tempo_version = Tempo2(),                   # or Tempo()
+    tempo_version = Tempo2("/path/to/TEMPO2"), # active parser path is Tempo2-oriented
 )
 
 # Validate inputs (optional)
@@ -33,4 +34,4 @@ validate(s)
 ## Next steps
 - See Settings for all options.
 - See Runner for materialization and job layouts.
-- See Tasks for higher-level orchestration.
+- See Tasks for higher-level orchestration and wrapper hooks.

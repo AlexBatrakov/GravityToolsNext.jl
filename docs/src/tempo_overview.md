@@ -1,6 +1,8 @@
 # Tempo Framework — Overview
 
-The Tempo Framework orchestrates TEMPO/TEMPO2 runs in a predictable, reproducible way.
+The Tempo Framework orchestrates TEMPO/TEMPO2 runs in a predictable,
+reproducible way. In the current package surface, parsed execution and examples
+are centered on `Tempo2`.
 It is built from small, typed settings that describe paths, engine options, input modifications,
 what to capture/keep, runtime workspace layout, and logging.
 
@@ -19,7 +21,7 @@ Core ideas:
 4. Materialize a job workspace (flat or split layout).
 5. Execute TEMPO/TEMPO2 with derived flags (capture residuals if requested).
 6. Parse engine outputs into result types.
-7. Optionally save artifacts/manifest and clean temporary files per policy.
+7. Optionally save artifacts and clean temporary files per policy.
 
 ## Paths and layout
 - `par_input` and `tim_input` are file names relative to `work_dir`.
@@ -32,7 +34,8 @@ Core ideas:
 - `layout = :flat | :split` and optional `temp_dir` control on-disk structure and execution cwd.
 - `link_tim`, `snapshot_par` control how inputs are staged into the job root.
 - `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error` control cleanup behavior.
-- `write_manifest` adds a small record of what was executed.
+- `timeout_s`, `write_manifest`, and `manifest_style` are currently reserved
+  workspace fields; timeout enforcement and manifest writing are deferred.
 - Optional I/O mirroring controls (e.g., `io_mirror = :none | :full | (:depth_minus, N)` if enabled in your build) can mirror job directories or outputs up the directory tree.
 
 ## Results (high level)
