@@ -14,6 +14,14 @@ using GravityToolsNext
         include("tempo_core_fixtures.jl")
     end
 
+    @testset "TIM documents" begin
+        include("tempo_tim_file.jl")
+    end
+
+    @testset "Observation preparation" begin
+        include("timing_sources.jl")
+    end
+
     @testset "Result and task assembly" begin
         include("result_task_assembly.jl")
     end

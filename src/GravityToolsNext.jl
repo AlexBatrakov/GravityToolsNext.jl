@@ -38,11 +38,16 @@ include("TempoFramework/TempoCore/AbstractTempo.jl")
 include("TempoFramework/TempoCore/TempoParameters.jl")
 include("TempoFramework/TempoCore/TempoParFile.jl")
 include("TempoFramework/TempoCore/TempoDataFiles.jl")
+include("TempoFramework/TempoCore/TempoTimFile.jl")
 include("TempoFramework/TempoCore/TempoOutput.jl")
 include("TempoFramework/TempoCore/Result/Result.jl")
 include("TempoFramework/TempoCore/TempoTasks.jl")
 include("TempoFramework/TempoCore/TempoSettings.jl")
 include("TempoFramework/TempoCore/TempoRun.jl")
+
+# TempoFramework/TimingSimulation
+include("TempoFramework/TimingSimulation/TOASources.jl")
+include("TempoFramework/TimingSimulation/Selection.jl")
 
 # TempoFramework/Prior
 include("TempoFramework/Prior/PriorSpecs.jl")

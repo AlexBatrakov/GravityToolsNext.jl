@@ -73,6 +73,18 @@ export TimTOAEntry,
        combine_tim_and_residuals_safe
 
 # ------------------------------------------------------------------------------------------
+# TempoFramework / TempoCore / TempoTimFile.jl
+# ------------------------------------------------------------------------------------------
+export TimDocument, TimTOA, TimTOAID, TimFormatError,
+       read_tim_document, toa_entries, set_toa_epoch!, shift_toa_epoch!, write_tim_document
+export subset_tim_document, create_tim_document
+
+# ------------------------------------------------------------------------------------------
+# TempoFramework / TimingSimulation
+# ------------------------------------------------------------------------------------------
+export ObservationSource, TOALineage, tim_source, explicit_schedule, regular_schedule, select_toas
+
+# ------------------------------------------------------------------------------------------
 # TempoFramework / TempoCore / TempoOutput.jl
 # ------------------------------------------------------------------------------------------
 export BasicTempoOutput,

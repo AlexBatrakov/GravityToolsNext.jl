@@ -20,6 +20,8 @@ makedocs(
         "Quickstart" => "quickstart.md",
         "Tempo Framework" => Any[
             "tempo_overview.md",
+            "tim_documents.md",
+            "observation_sources.md",
             "tempo_tasks_basic.md",
             "results.md",
             "prior.md",
