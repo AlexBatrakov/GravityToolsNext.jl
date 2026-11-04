@@ -44,6 +44,7 @@ RUN set -euxo pipefail; \
         git \
         gnutls-bin \
         gsl-bin \
+        htop \
         libcfitsio-dev \
         libfftw3-3 \
         libfftw3-bin \

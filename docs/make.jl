@@ -28,6 +28,7 @@ makedocs(
             "tempo_tasks_grid_prior.md",
         ],
         "Guides" => Any[
+            "environments.md",
             "settings.md",
             "runner.md",
             "tasks.md",

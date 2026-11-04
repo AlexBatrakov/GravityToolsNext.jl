@@ -51,7 +51,10 @@ supported real-binary `Tempo2` path when that environment is available.
 
 ## Installation
 
-Supported Julia versions: **1.10+**.
+Supported Julia versions: **1.12+** (Julia 1.x). The validated development
+container uses **Julia 1.12.4**; this is a runtime reference, not an exact
+package compatibility pin. See [environment policy](docs/src/environments.md)
+for local manifests and reproducible experiment environments.
 
 ```julia
 using Pkg

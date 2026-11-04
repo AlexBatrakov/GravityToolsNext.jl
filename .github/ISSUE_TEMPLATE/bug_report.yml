@@ -18,7 +18,7 @@ body:
   - type: input
     attributes:
       label: Julia version
-      placeholder: e.g. 1.10.10
+      placeholder: e.g. 1.12.4
 
   - type: input
     attributes:
