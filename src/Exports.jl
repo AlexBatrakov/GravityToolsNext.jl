@@ -83,6 +83,8 @@ export subset_tim_document, create_tim_document
 # TempoFramework / TimingSimulation
 # ------------------------------------------------------------------------------------------
 export ObservationSource, TOALineage, tim_source, explicit_schedule, regular_schedule, select_toas
+export IdealizationSettings, IdealizationError, NoiselessTemplate,
+       create_noiseless_template, save_noiseless_template, load_noiseless_template
 
 # ------------------------------------------------------------------------------------------
 # TempoFramework / TempoCore / TempoOutput.jl

@@ -17,3 +17,8 @@ TIM subset with explicit output paths. It runs entirely in Julia and does not
 align epochs to a timing model or call TEMPO2. Activate the package environment
 when running from an external experiment directory. Existing output files are
 not overwritten.
+
+`noiseless_template.jl` creates, saves and reloads a bounded DDSTG GR noiseless
+template from an existing TIM/PAR, or a literal 16-TOA schedule with
+`--regular reference.par new-job new-bundle`, in a prepared TEMPO2 environment. See
+[noiseless templates](../docs/src/noiseless_templates.md) for support boundaries.

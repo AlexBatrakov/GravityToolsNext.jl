@@ -34,8 +34,8 @@ Core ideas:
 - `layout = :flat | :split` and optional `temp_dir` control on-disk structure and execution cwd.
 - `link_tim`, `snapshot_par` control how inputs are staged into the job root.
 - `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error` control cleanup behavior.
-- `timeout_s`, `write_manifest`, and `manifest_style` are currently reserved
-  workspace fields; timeout enforcement and manifest writing are deferred.
+- `timeout_s` enforces a positive POSIX engine deadline with owned process-group
+  cleanup. `write_manifest` and `manifest_style` remain reserved.
 - Optional I/O mirroring controls (e.g., `io_mirror = :none | :full | (:depth_minus, N)` if enabled in your build) can mirror job directories or outputs up the directory tree.
 
 ## Results (high level)
@@ -45,3 +45,10 @@ Parsing builds structured results that can include:
 - Optional white noise diagnostics (if enabled)
 
 See the dedicated Results page for details.
+
+## Noiseless templates
+
+The [noiseless template API](noiseless_templates.md) provides bounded fixed-model
+DDSTG GR idealization and explicit portable save/load for both source origins.
+Genuine explicit/regular schedules use bounded MODE 0 initialization followed
+by strict MODE 1 acceptance, retaining generated origin and nominal errors.

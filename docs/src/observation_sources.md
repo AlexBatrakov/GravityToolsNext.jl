@@ -103,6 +103,10 @@ new file IDs; keep the returned mapping separately. Documents/snapshots/settings
 are independently owned. Mutate epochs via the accepted TIM editing API.
 
 See `examples/observation_sources.jl` for an example with explicit output paths.
+Existing file-origin sources and genuine explicit/regular schedules can feed the
+bounded [noiseless template API](noiseless_templates.md). Generated inputs retain
+their origin and selected IDs through phase bootstrap and strict final MODE 1
+verification; source construction alone makes no timing-model claim.
 
 ```@docs
 ObservationSource

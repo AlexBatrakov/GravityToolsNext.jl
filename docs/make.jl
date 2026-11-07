@@ -22,6 +22,7 @@ makedocs(
             "tempo_overview.md",
             "tim_documents.md",
             "observation_sources.md",
+            "noiseless_templates.md",
             "tempo_tasks_basic.md",
             "results.md",
             "prior.md",

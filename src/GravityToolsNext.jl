@@ -48,6 +48,9 @@ include("TempoFramework/TempoCore/TempoRun.jl")
 # TempoFramework/TimingSimulation
 include("TempoFramework/TimingSimulation/TOASources.jl")
 include("TempoFramework/TimingSimulation/Selection.jl")
+include("TempoFramework/TimingSimulation/NoiselessTemplates.jl")
+include("TempoFramework/TimingSimulation/Idealization.jl")
+include("TempoFramework/TimingSimulation/TemplateArtifacts.jl")
 
 # TempoFramework/Prior
 include("TempoFramework/Prior/PriorSpecs.jl")

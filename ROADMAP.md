@@ -80,10 +80,20 @@ maintenance phases above; it does not imply their completion.
 - [x] S0: Verify fixed-model residual evaluation and relevant TEMPO2 noise conventions.
 - [x] S1: Implement precision-preserving TIM reading, editing, and writing.
 - [x] S2: Implement reproducible TOA selection and configurable observation schedules.
-- [ ] S3: Produce reusable noiseless templates with explicit convergence checks.
+- [x] S3: Produce reusable noiseless templates with explicit convergence checks.
 - [ ] S4: Generate white-noise datasets with known EFAC/EQUAD and saved truth.
 - [ ] S5: Add Fourier red-noise simulation with verified normalization and saved coefficients.
 - [ ] S6: Establish ensemble recovery experiments, starting with white noise and then temporal red-noise prediction.
+
+The bounded DDSTG GR template API supports existing TIMs and genuine explicit/
+regular schedules, strict MODE 1 verification, and portable save/load. Generated
+schedules use separate phase bootstrap with fixed physics and unchanged errors.
+The single current bundle format (marker 3) records initial half-cycle margin as
+diagnostics while preserving later pulse invariance. Older or incomplete records
+are rejected without migration; historical artifacts remain evidence.
+The initial validated scope is limited to 128 TOAs and the documented model/file
+subset; larger datasets, arbitrary models and absolute pulse locking remain
+separate follow-up work.
 
 The first end-to-end milestone is a white-noise dataset derived from an existing
 TIM and a fixed reference PAR. Generated observation schedules are also in scope;

@@ -26,6 +26,15 @@ using GravityToolsNext
         include("tempo_deadlines.jl")
     end
 
+    @testset "Noiseless templates" begin
+        include("noiseless_templates.jl")
+        include("noiseless_schedules.jl")
+        include("noiseless_margin_policy.jl")
+        include("noiseless_tim_integrity.jl")
+        include("noiseless_integration.jl")
+        include("noiseless_margin_integration.jl")
+    end
+
     @testset "Result and task assembly" begin
         include("result_task_assembly.jl")
     end
