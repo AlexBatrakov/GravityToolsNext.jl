@@ -22,8 +22,16 @@ using GravityToolsNext
         include("timing_sources.jl")
     end
 
+    @testset "Engine deadlines" begin
+        include("tempo_deadlines.jl")
+    end
+
     @testset "Result and task assembly" begin
         include("result_task_assembly.jl")
+    end
+
+    @testset "Runner TIM integrity" begin
+        include("runner_tim_integrity.jl")
     end
 
     @testset "Gated integration" begin

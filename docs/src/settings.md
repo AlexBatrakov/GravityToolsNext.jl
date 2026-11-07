@@ -50,9 +50,11 @@ Runtime/materialization settings:
 - `temp_dir::Union{Nothing,String}`
 - `link_tim::Bool`, `snapshot_par::Bool`
 - Cleanup: `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error`
-- Deferred/reserved knobs: `timeout_s`, `write_manifest`, `manifest_style`
-  These fields are stored in settings today, but timeout enforcement and
-  manifest emission are not implemented by the runner yet.
+- `timeout_s`: positive integer POSIX engine deadline; `nothing` keeps the
+  ordinary no-deadline behavior. The owned process group receives TERM and,
+  after a one-second grace, KILL. Partial output is retained.
+- Deferred/reserved knobs: `write_manifest`, `manifest_style`; manifest
+  emission is not implemented by the runner yet.
 
 ## LoggingOptions
 - `verbosity` (`:silent | :warn | :info | :debug` or `0..3`)

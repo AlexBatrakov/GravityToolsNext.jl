@@ -115,7 +115,7 @@ Fields
 - `tmp_dir`        : working CWD for the engine (may equal `job_root`)
 - `run_cwd`        : actual CWD for the engine process
 - `par_in_path`    : resolved path to the *input* par file used to create `_init.par`
-- `tim_in_path`    : resolved path to the staged TIM inside the job
+- `tim_in_path`    : staged TIM archive; preparation verifies equality to the CWD input
 - `par_out_path`   : absolute path where the final `.par` is placed
 - `created_paths`  : a list of paths created during materialization
 - `notes`          : assorted flags (e.g., `:snapshot_par`, `:linked_tim`)
@@ -456,8 +456,8 @@ function _validate_job(job::MaterializedJob)
     @assert isdir(job.run_cwd) "run_cwd does not exist: $(job.run_cwd)"
 
     @assert isfile(job.par_in_path) "input par not found: $(job.par_in_path)"
-    @assert isfile(job.tim_in_path) "tim file not found: $(job.tim_in_path)"
-    @assert isfile(joinpath(job.run_cwd, basename(job.tim_in_path))) "tim file not staged in run_cwd: $(joinpath(job.run_cwd, basename(job.tim_in_path)))"
+    # TIM readability/content is checked separately at its archive and command
+    # pathnames during preparation, and again immediately before execution.
 
     @assert isabspath(job.par_out_path) "par_out_path must be absolute"
     @assert isdir(dirname(job.par_out_path)) "parent of par_out_path must exist: $(dirname(job.par_out_path))"
@@ -535,18 +535,48 @@ end
 # Run (raw)
 # --------------------------------------------------------------------------------------------------------------
 
-"""
-    run_tempo_raw(job::MaterializedJob) -> (stdout::String, stderr::String, exit_code::Int)
+# MaterializedJob owns staging; this snapshot owns the command and audited inputs.
+# Keep the logical CWD pathname: resolving a symlink once would miss retargeting.
+struct _PreparedTempoRun
+    job::MaterializedJob
+    cmd::Cmd
+    init_path::String
+    init_sha256::String
+    tim_path::String
+    tim_sha256::String
+    diagnostics::Dict{Symbol,Any}
+end
 
-Invoke TEMPO/TEMPO2 from the job's working directory (CWD) using **relative**
-paths (`-f <init.par> <tim> -outpar <name.par>`). Returns captured stdout/stderr
-and a coarse exit code: returns 0 on normal completion, 1 on Julia-side exception.
-"""
-function run_tempo_raw(job::MaterializedJob)
+function _tempo_tim_sha256(path::AbstractString,role::AbstractString)
+    isfile(path) || throw(ArgumentError("Missing or unreadable $role TIM: $path"))
+    try
+        return bytes2hex(sha256(read(path)))
+    catch err
+        err isa InterruptException && rethrow()
+        throw(ArgumentError("Cannot read $role TIM at $path: $(sprint(showerror,err))"))
+    end
+end
+
+function _validate_prepared_tim(prepared::_PreparedTempoRun)
+    _tempo_tim_sha256(prepared.tim_path,"executed") == prepared.tim_sha256 ||
+        throw(ArgumentError("Prepared executed TIM content changed: $(prepared.tim_path)"))
+    _tempo_tim_sha256(prepared.job.tim_in_path,"archive") == prepared.tim_sha256 ||
+        throw(ArgumentError("Prepared archive TIM content changed: $(prepared.job.tim_in_path)"))
+    return nothing
+end
+
+function _prepare_tempo_run(job::MaterializedJob)
     settings = job.settings
 
     # Validate job invariants and existence of required files/dirs
     _validate_job(job)
+
+    tim_name = basename(job.tim_in_path)
+    tim_path = abspath(job.run_cwd,tim_name)
+    tim_sha256 = _tempo_tim_sha256(tim_path,"executed")
+    archive_sha256 = _tempo_tim_sha256(job.tim_in_path,"archive")
+    tim_sha256 == archive_sha256 || throw(ArgumentError(
+        "Executed TIM differs from archive: $tim_path != $(job.tim_in_path)"))
 
     # Read input par; create an `_init.par` inside run_cwd; apply overrides
     run_cwd = job.run_cwd
@@ -585,7 +615,6 @@ function run_tempo_raw(job::MaterializedJob)
     end
 
     # Build argv using relative filenames (from CWD)
-    tim_name = basename(job.tim_in_path)
     exe = tempo_cmd_path(settings.engine.tempo_version)
     # par_init_name already set above
     out_name = basename(job.par_out_path)
@@ -615,23 +644,115 @@ function run_tempo_raw(job::MaterializedJob)
     env = tempo_env(settings.engine.tempo_version)
     cmd = setenv(cmd, env; dir = run_cwd)
 
-    output_io = IOBuffer(); stderr_io = IOBuffer()
-    out_str = ""
-    err_str = ""
-    exit_code = 1
-    try
-        run(pipeline(cmd, stdout = output_io, stderr = stderr_io))
-        out_str = String(take!(output_io))
-        err_str = String(take!(stderr_io))
-        exit_code = 0
-    catch err
-        # still flush buffers if any
-        out_str = String(take!(output_io)) * "\nERROR: tempo process crashed with exception: $(err)"
-        err_str = String(take!(stderr_io))
-        exit_code = 1
-    finally
-        close(output_io); close(stderr_io)
+    return _PreparedTempoRun(job, cmd, joinpath(run_cwd, par_init_name),
+        bytes2hex(sha256(read(joinpath(run_cwd, par_init_name)))),
+        tim_path,tim_sha256,Dict{Symbol,Any}(:executed_tim_path=>tim_path,
+            :executed_tim_sha256=>tim_sha256,:archive_tim_path=>job.tim_in_path,
+            :archive_tim_sha256=>archive_sha256))
+end
+
+# A finite deadline uses an owned POSIX process group. The ordinary no-deadline
+# path retains its historical synchronous behavior and return convention.
+function _tempo_group_alive(pid::Int)
+    pid > 0 && ccall(:kill, Cint, (Cint, Cint), -pid, 0) == 0
+end
+
+function _stop_tempo_group(pid::Int; grace_s::Real=1.0)
+    pid > 0 || return
+    ccall(:kill, Cint, (Cint, Cint), -pid, Base.SIGTERM)
+    timedwait(() -> !_tempo_group_alive(pid), grace_s; pollint=0.01)
+    _tempo_group_alive(pid) && ccall(:kill, Cint, (Cint, Cint), -pid, Base.SIGKILL)
+    return nothing
+end
+
+function _capture_tempo_process(cmd::Cmd, timeout_s)
+    if timeout_s === nothing
+        outio=IOBuffer(); errio=IOBuffer()
+        try
+            run(pipeline(cmd, stdout=outio, stderr=errio))
+            return (stdout=String(take!(outio)), stderr=String(take!(errio)),
+                code=0, timed_out=false, native_exit=0, native_signal=0, status=:ok)
+        catch err
+            return (stdout=String(take!(outio))*"\nERROR: tempo process crashed with exception: $(err)",
+                stderr=String(take!(errio)), code=1, timed_out=false,
+                native_exit=nothing, native_signal=nothing, status=:engine_failed)
+        finally
+            close(outio); close(errio)
+        end
     end
+    Sys.isunix() || throw(ArgumentError("Finite TEMPO deadlines require POSIX process groups"))
+    isfinite(timeout_s) && timeout_s > 0 || throw(ArgumentError("timeout_s must be positive and finite"))
+    # Files avoid pipe readers hanging when a descendant inherits stdout/stderr.
+    outpath,outio=mktemp(); errpath,errio=mktemp()
+    process=nothing; pid=0; expired=false; status=:engine_failed
+    native_exit=nothing; message=""
+    try
+        owned=Cmd(ignorestatus(cmd); detach=true)
+        process=run(pipeline(owned, stdout=outio, stderr=errio); wait=false)
+        pid=Int(getpid(process))
+        expired=timedwait(() -> process_exited(process), timeout_s; pollint=0.01) === :timed_out
+        if expired
+            status=:timeout
+            _stop_tempo_group(pid)
+            message="\nERROR: tempo process timed out after $(timeout_s) seconds"
+        elseif _tempo_group_alive(pid)
+            status=:descendants_terminated
+            _stop_tempo_group(pid)
+            message="\nERROR: tempo process left running descendants; owned process group terminated"
+        end
+        wait(process)
+        native_exit=process.exitcode
+        if !expired && isempty(message)
+            status=success(process) ? :ok : :engine_failed
+            success(process) || (message="\nERROR: tempo process exited with status $(process.exitcode), signal $(process.termsignal)")
+        end
+    catch err
+        message*="\nERROR: tempo process crashed with exception: $(err)"
+    finally
+        if process !== nothing
+            # Only the group created for this process is ever signalled.
+            _tempo_group_alive(pid) && _stop_tempo_group(pid; grace_s=0.1)
+            wait(process)
+        end
+        close(outio); close(errio)
+    end
+    try
+        return (stdout=read(outpath,String)*message, stderr=read(errpath,String),
+            code=status === :ok ? 0 : 1, timed_out=expired,
+            native_exit=native_exit, native_signal=process===nothing ? nothing : process.termsignal, status=status)
+    finally
+        rm(outpath;force=true); rm(errpath;force=true)
+    end
+end
+
+"""
+    run_tempo_raw(job::MaterializedJob) -> (stdout::String, stderr::String, exit_code::Int)
+
+Invoke TEMPO/TEMPO2 from the job's working directory (CWD) using **relative**
+paths (`-f <init.par> <tim> -outpar <name.par>`). Returns captured stdout/stderr
+and a coarse exit code: returns 0 on normal completion, 1 on Julia-side exception.
+"""
+function run_tempo_raw(job::MaterializedJob)
+    return run_tempo_raw(_prepare_tempo_run(job))
+end
+
+function run_tempo_raw(prepared::_PreparedTempoRun)
+    job=prepared.job
+    settings=job.settings
+    run_cwd=job.run_cwd
+    po_base=replace(_strip_par_ext(basename(settings.paths.par_output)), r"_out$" => "")
+    out_name=basename(job.par_out_path)
+    bytes2hex(sha256(read(prepared.init_path))) == prepared.init_sha256 ||
+        throw(ArgumentError("Prepared engine PAR changed before launch"))
+    _validate_prepared_tim(prepared)
+    result=_capture_tempo_process(prepared.cmd,settings.workspace.timeout_s)
+    merge!(prepared.diagnostics,Dict(:status=>result.status,:timed_out=>result.timed_out,
+        :native_exit=>result.native_exit,:native_signal=>result.native_signal,:timeout_s=>settings.workspace.timeout_s))
+    job.notes[:run_diagnostics]=copy(prepared.diagnostics)
+    # Parsed/Basic consumers read the archive. Never return incoherent TIM bytes
+    # if an engine (or another writer) changed either input during execution.
+    _validate_prepared_tim(prepared)
+    out_str=result.stdout; err_str=result.stderr; exit_code=result.code
 
     # NOTE: we **copy** the engine-written outpar from CWD to `par_out_path` here.
     # The tmp/CWD remains a faithful snapshot of everything the engine produced.
@@ -696,7 +817,7 @@ Fields
 - `run_cwd`      : actual engine CWD (`tmp/` for split layout by default)
 - `input_dir`    : directory with staged inputs for the run
 - `output_dir`   : directory where final outputs reside
-- `tim_path`     : the staged TIM used by the run
+- `tim_path`     : staged TIM archive, checked equal to the executed input at run boundaries
 - `par_out_path` : final `.par` path (may or may not exist on failure)
 - `out_path`     : stdout capture file path (when enabled), otherwise `nothing`
 - `residual_paths` : per-iteration residual file paths (`nothing` if absent)

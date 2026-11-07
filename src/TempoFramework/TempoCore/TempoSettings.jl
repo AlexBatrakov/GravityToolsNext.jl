@@ -373,7 +373,7 @@ Cleanup & retention
 - `keep_tmp_on_error::Bool`    : keep `tmp/` if the run failed.
 
 Runtime & manifest
-- `timeout_s::Union{Nothing,Int}` : reserved runtime limit stored in settings; timeout enforcement is not implemented yet.
+- `timeout_s::Union{Nothing,Int}` : positive finite engine deadline on POSIX; terminates the owned process group with a one-second kill grace. `nothing` retains the ordinary no-deadline behavior.
 - `write_manifest::Bool`          : reserved manifest flag; manifest emission is not implemented yet.
 - `manifest_style::Symbol`        : reserved manifest format (`:json` | `:toml`) for future manifest support.
 """
@@ -455,6 +455,8 @@ WorkspaceOptions(;
     manifest_style in _MANIFEST_STYLE  || error("WorkspaceOptions: manifest_style must be one of $(_MANIFEST_STYLE)")
     overwrite in _OVERWRITE_POL        || error("WorkspaceOptions: overwrite must be one of $(_OVERWRITE_POL)")
     _validate_io_mirror(io_mirror)
+    timeout_s === nothing || (!(timeout_s isa Bool) && timeout_s > 0) ||
+        throw(ArgumentError("timeout_s must be a positive integer or nothing"))
 
     WorkspaceOptions(
         # Lifecycle & isolation
@@ -654,7 +656,7 @@ Keyword arguments
   or pass `analysis::WhiteNoiseOptions`
 - Workspace (convenience): `work_mode`, `job_name`, `overwrite` (`:error|:reuse|:unique|:clean`), `layout`, `temp_dir`,
   `link_tim`, `snapshot_par`, `cleanup_before_run`, `keep_tmp_on_success`, `keep_tmp_on_error`,
-  `timeout_s`, `write_manifest`, `manifest_style` (currently stored but not acted on by the runner)
+  `timeout_s` (POSIX engine deadline), `write_manifest`, `manifest_style` (manifest options are reserved)
   or pass `workspace::WorkspaceOptions`
 - Logging (convenience): `verbosity`, `with_timestamps`
   or pass `logging::LoggingOptions`
